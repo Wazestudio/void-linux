@@ -1,12 +1,15 @@
 name: Build Void-Linux APK
 
 on:
+  # Déclenchement manuel depuis l'onglet Actions sur GitHub
+  workflow_dispatch:
+
+  # Déclenchements automatiques (Commentez ou supprimez ces lignes si vous voulez UNIQUEMENT le manuel)
   push:
     branches: [ main, master, dev ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,7 +53,7 @@ jobs:
           restore-keys: |
             cmake-${{ runner.os }}-
 
-      # NOUVEAU : Optimisation du cache pour l'image Docker de Termux Package Builder
+      # Optimisation du cache pour l'image Docker de Termux Package Builder
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
@@ -67,7 +70,7 @@ jobs:
             echo "::warning::Pas de script generate-mipmaps.sh — skip"
           fi
 
-      # AJOUT : Installation explicite de dpkg (fournit dpkg-deb) en plus de patchelf
+      # Installation explicite de dpkg (fournit dpkg-deb) en plus de patchelf
       - name: Install PRoot packaging tools
         run: |
           sudo apt-get update
@@ -77,7 +80,7 @@ jobs:
         run: bash tools/build-proot.sh
 
       - name: Build APKs (Debug & Release)
-        run: gradle assembleDebug assembleRelease --stacktrace --no-daemon
+        run: gradle clean assembleDebug assembleRelease --stacktrace --no-daemon
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
