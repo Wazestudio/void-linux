@@ -72,6 +72,10 @@ jobs:
       - name: Build official Termux PRoot (ARM64)
         run: bash tools/build-proot.sh
 
+      # Téléchargement et intégration du Rootfs Kali Linux dans les assets de l'application
+      - name: Download and verify official Kali ARM64 rootfs
+        run: bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
+
       - name: Build APKs (Debug & Release)
         run: gradle clean assembleDebug assembleRelease --stacktrace --no-daemon
 
