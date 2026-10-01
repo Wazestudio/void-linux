@@ -10,19 +10,26 @@ if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is required to build the official Termux PRoot package." >&2
     exit 1
 fi
-if ! command -v dpkg-deb >/dev/null 2>&1 || ! command -v patchelf >/dev/null 2>&1; then
-    echo "dpkg-deb and patchelf are required." >&2
+if ! command -v dpkg-deb >/dev/null 2>&1 || ! command -v patchelf >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+    echo "dpkg-deb, patchelf, and curl are required." >&2
     exit 1
 fi
 
 rm -rf "$WORK_DIR"
 git init --quiet "$WORK_DIR"
-git -C "$WORK_DIR" remote add origin https://github.com/termux/termux-packages.git
+git -C "$WORK_DIR" remote add origin https://github.com
 git -C "$WORK_DIR" fetch --quiet --depth 1 origin "$TERMUX_PACKAGES_REF"
 git -C "$WORK_DIR" checkout --quiet FETCH_HEAD
 
 cd "$WORK_DIR"
-./scripts/run-docker.sh ./build-package.sh -I -C -a aarch64 proot libtalloc libandroid-shmem
+
+# 1. On compile UNIQUEMENT proot. On utilise l'argument -f pour s'assurer que le .deb local soit généré.
+./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
+
+# 2. Téléchargement direct des versions exactes de libtalloc et libandroid-shmem (gain de temps massif)
+echo "Téléchargement des dépendances pré-compilées..."
+curl -sL -o "libandroid-shmem_0.7_aarch64.deb" "https://termux.dev"
+curl -sL -o "libtalloc_2.4.3_aarch64.deb" "https://termux.dev"
 
 find_deb() {
     local pattern="$1"
@@ -37,6 +44,8 @@ find_deb() {
 
 STAGE_DIR="$WORK_DIR/proot-runtime"
 mkdir -p "$STAGE_DIR"
+
+# Extraction de PRoot (généré par Docker) et des librairies (téléchargées par curl)
 for package in proot libtalloc libandroid-shmem; do
     deb="$(find_deb "${package}_*_aarch64.deb")"
     dpkg-deb -x "$deb" "$STAGE_DIR"
@@ -61,10 +70,12 @@ rm -f \
     "$OUTPUT_DIR/libproot_loader.so" \
     "$OUTPUT_DIR/libtalloc.so" \
     "$OUTPUT_DIR/libandroid-shmem.so"
+
 cp "$PROOT_BINARY" "$OUTPUT_DIR/libproot.so"
 cp "$PROOT_LOADER" "$OUTPUT_DIR/libproot_loader.so"
 cp "$TALLOC_LIBRARY" "$OUTPUT_DIR/libtalloc.so"
 cp "$SHMEM_LIBRARY" "$OUTPUT_DIR/libandroid-shmem.so"
+
 chmod 755 \
     "$OUTPUT_DIR/libproot.so" \
     "$OUTPUT_DIR/libproot_loader.so" \
@@ -74,6 +85,7 @@ chmod 755 \
 patchelf --set-soname libtalloc.so "$OUTPUT_DIR/libtalloc.so"
 patchelf --set-soname libandroid-shmem.so "$OUTPUT_DIR/libandroid-shmem.so"
 patchelf --set-rpath '$ORIGIN' "$OUTPUT_DIR/libproot.so"
+
 while IFS= read -r dependency; do
     case "$dependency" in
         libtalloc.so*)
