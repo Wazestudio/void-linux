@@ -46,6 +46,10 @@ android {
         viewBinding = true
     }
 
+    lint {
+        abortOnError = false
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true

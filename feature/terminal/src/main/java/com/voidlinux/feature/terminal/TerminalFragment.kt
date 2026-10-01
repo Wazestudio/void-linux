@@ -68,7 +68,7 @@ class TerminalFragment : Fragment() {
 
         binding.keyStart.setOnClickListener {
             viewModel.startSession(buffer) { text ->
-                activity?.runOnUiThread { binding.terminalView.writeText(text) }
+                activity?.runOnUiThread { _binding?.terminalView?.writeText(text) }
             }
             binding.terminalView.post {
                 val inputMethod = requireContext()

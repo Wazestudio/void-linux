@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fond principal — noir profond -->
+    <color name="void_background">#FF050508</color>
+
+    <!-- Surface — légèrement plus clair -->
+    <color name="void_surface">#FF0D0D12</color>
+    <color name="void_surface_variant">#FF16161F</color>
+
+    <!-- Accent principal — vert néon -->
+    <color name="void_accent">#FF00FF88</color>
+    <color name="void_accent_dim">#FF00AA55</color>
+
+    <!-- Accent secondaire — violet -->
+    <color name="void_secondary">#FF9B5DE5</color>
+
+    <!-- Alerte -->
+    <color name="void_warning">#FFFFB800</color>
+    <color name="void_error">#FFFF3B3B</color>
+
+    <!-- Texte -->
+    <color name="void_text">#FFE6E6E6</color>
+    <color name="void_text_dim">#FF8888A0</color>
+    <color name="void_text_disabled">#FF4A4A5A</color>
+
+    <!-- Terminal -->
+    <color name="term_background">#FF000000</color>
+    <color name="term_foreground">#FF00FF88</color>
+    <color name="term_cursor">#FF00FF88</color>
+    <color name="term_selection">#FF004422</color>
+
+    <!-- Terminal ANSI -->
+    <color name="term_black">#FF000000</color>
+    <color name="term_red">#FFFF5555</color>
+    <color name="term_green">#FF50FA7B</color>
+    <color name="term_yellow">#FFF1FA8C</color>
+    <color name="term_blue">#FF6272A4</color>
+    <color name="term_magenta">#FFBD93F9</color>
+    <color name="term_cyan">#FF8BE9FD</color>
+    <color name="term_white">#FFF8F8F2</color>
+
+    <!-- Divider -->
+    <color name="void_divider">#FF1F1F2E</color>
+
+    <!-- Statuts -->
+    <color name="status_ok">#FF00FF88</color>
+    <color name="status_warn">#FFFFB800</color>
+    <color name="status_error">#FFFF3B3B</color>
+</resources>

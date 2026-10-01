@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_s">8dp</dimen>
+    <dimen name="space_m">16dp</dimen>
+    <dimen name="space_l">24dp</dimen>
+    <dimen name="space_xl">32dp</dimen>
+
+    <dimen name="corner_s">8dp</dimen>
+    <dimen name="corner_m">12dp</dimen>
+    <dimen name="corner_l">16dp</dimen>
+
+    <dimen name="text_xs">11sp</dimen>
+    <dimen name="text_s">13sp</dimen>
+    <dimen name="text_m">15sp</dimen>
+    <dimen name="text_l">18sp</dimen>
+    <dimen name="text_xl">22sp</dimen>
+
+    <dimen name="icon_s">20dp</dimen>
+    <dimen name="icon_m">24dp</dimen>
+    <dimen name="icon_l">32dp</dimen>
+</resources>

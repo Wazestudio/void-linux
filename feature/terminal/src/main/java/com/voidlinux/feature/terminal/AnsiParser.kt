@@ -8,7 +8,7 @@ import android.graphics.Color
  */
 class AnsiParser(private val buffer: TerminalBuffer) {
 
-    enum class State { TEXT, ESCAPE, CSI, OSC }
+    enum class State { TEXT, ESCAPE, CSI, OSC, CHARSET }
 
     private var state = State.TEXT
     private val csiBuffer = StringBuilder()
@@ -40,6 +40,7 @@ class AnsiParser(private val buffer: TerminalBuffer) {
                 State.ESCAPE -> handleEscape(ch)
                 State.CSI -> handleCsi(ch)
                 State.OSC -> handleOsc(ch)
+                State.CHARSET -> state = State.TEXT // choix de jeu de caractères : on ignore le caractère suivant
             }
         }
     }
@@ -72,6 +73,7 @@ class AnsiParser(private val buffer: TerminalBuffer) {
                 csiBuffer.clear()
             }
             ']' -> state = State.OSC
+            '(', ')', '*', '+' -> state = State.CHARSET
             else -> state = State.TEXT
         }
     }
@@ -108,6 +110,10 @@ class AnsiParser(private val buffer: TerminalBuffer) {
             }
             'K' -> buffer.clearLine()
             'P' -> buffer.deleteChar()
+            'G' -> buffer.moveCursor(buffer.cursorRow, (params.getOrNull(0) ?: 1) - 1)
+            'd' -> buffer.moveCursor((params.getOrNull(0) ?: 1) - 1, buffer.cursorCol)
+            '@' -> buffer.insertChars(params.getOrNull(0) ?: 1)
+            'X' -> buffer.eraseChars(params.getOrNull(0) ?: 1)
             else -> { /* non supporté */ }
         }
 
@@ -117,6 +123,7 @@ class AnsiParser(private val buffer: TerminalBuffer) {
     private fun handleOsc(ch: Char) {
         // OSC : ignorer jusqu'à BEL ou ST
         if (ch == '\u0007') state = State.TEXT
+        else if (ch == '\u001B') state = State.ESCAPE // ESC \ (ST) termine aussi un OSC
     }
 
     private fun parseParams(s: String): List<Int> {

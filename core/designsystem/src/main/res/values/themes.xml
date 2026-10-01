@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.VoidLinux" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/void_accent</item>
+        <item name="colorOnPrimary">@color/void_background</item>
+        <item name="colorPrimaryContainer">@color/void_accent_dim</item>
+        <item name="colorSecondary">@color/void_secondary</item>
+        <item name="android:colorBackground">@color/void_background</item>
+        <item name="colorSurface">@color/void_surface</item>
+        <item name="colorSurfaceVariant">@color/void_surface_variant</item>
+        <item name="colorOnSurface">@color/void_text</item>
+        <item name="colorOnBackground">@color/void_text</item>
+        <item name="colorError">@color/void_error</item>
+        <item name="android:statusBarColor">@color/void_background</item>
+        <item name="android:navigationBarColor">@color/void_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@color/void_background</item>
+        <item name="android:textColorPrimary">@color/void_text</item>
+        <item name="android:textColorSecondary">@color/void_text_dim</item>
+    </style>
+
+    <style name="VoidText">
+        <item name="android:textColor">@color/void_text</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="VoidText.Title">
+        <item name="android:textColor">@color/void_text</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="VoidText.Body">
+        <item name="android:textColor">@color/void_text</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="VoidText.Dim">
+        <item name="android:textColor">@color/void_text_dim</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="VoidButton" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/void_accent</item>
+        <item name="android:textColor">@color/void_background</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <style name="VoidButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="strokeColor">@color/void_accent</item>
+        <item name="android:textColor">@color/void_accent</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
+
+    <style name="VoidCard" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/void_surface</item>
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/void_divider</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+</resources>

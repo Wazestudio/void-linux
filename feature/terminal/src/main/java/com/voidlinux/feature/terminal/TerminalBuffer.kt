@@ -119,6 +119,23 @@ class TerminalBuffer(
         }
     }
 
+    fun insertChars(count: Int) {
+        val n = count.coerceIn(1, cols - cursorCol)
+        for (c in cols - 1 downTo cursorCol + n) {
+            grid[cursorRow][c] = grid[cursorRow][c - n]
+        }
+        for (c in cursorCol until cursorCol + n) {
+            grid[cursorRow][c] = Cell()
+        }
+    }
+
+    fun eraseChars(count: Int) {
+        val end = (cursorCol + count.coerceAtLeast(1)).coerceAtMost(cols)
+        for (c in cursorCol until end) {
+            grid[cursorRow][c] = Cell()
+        }
+    }
+
     fun deleteChar() {
         for (c in cursorCol until cols - 1) {
             grid[cursorRow][c] = grid[cursorRow][c + 1]

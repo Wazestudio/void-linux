@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/terminalFragment" android:title="Terminal" />
-    <item android:id="@+id/linuxFragment" android:title="Linux" />
-    <item android:id="@+id/torFragment" android:title="Tor" />
-    <item android:id="@+id/securityFragment" android:title="Sécurité" />
-    <item android:id="@+id/settingsFragment" android:title="Réglages" />
+    <item android:id="@+id/terminalFragment"
+        android:icon="@android:drawable/ic_menu_edit"
+        android:title="Terminal" />
+    <item android:id="@+id/linuxFragment"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:title="Linux" />
+    <item android:id="@+id/torFragment"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="Tor" />
+    <item android:id="@+id/securityFragment"
+        android:icon="@android:drawable/ic_lock_lock"
+        android:title="Sécurité" />
+    <item android:id="@+id/settingsFragment"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="Réglages" />
 </menu>

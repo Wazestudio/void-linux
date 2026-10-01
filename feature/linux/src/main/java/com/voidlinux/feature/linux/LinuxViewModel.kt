@@ -5,9 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.voidlinux.core.common.Constants
 import com.voidlinux.core.common.VoidResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class LinuxUiState(
     val distroId: String = Constants.DISTRO_KALI,
@@ -94,7 +96,7 @@ class LinuxViewModel(app: Application) : AndroidViewModel(app) {
 
     fun uninstall() {
         viewModelScope.launch {
-            val ok = repo.uninstall(_uiState.value.distroId)
+            val ok = withContext(Dispatchers.IO) { repo.uninstall(_uiState.value.distroId) }
             _uiState.value = _uiState.value.copy(
                 installed = !ok,
                 statusMessage = if (ok) "Désinstallé" else "Échec"

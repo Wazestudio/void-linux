@@ -24,6 +24,13 @@ class TerminalView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     var buffer: TerminalBuffer = TerminalBuffer()
+        set(value) {
+            field = value
+            parser = AnsiParser(value)
+        }
+
+    // Le parseur garde l'état (couleurs, séquence ESC coupée en deux) entre deux lectures
+    private var parser: AnsiParser = AnsiParser(buffer)
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.MONOSPACE
@@ -145,7 +152,7 @@ class TerminalView @JvmOverloads constructor(
 
     /** Écrit du texte dans le buffer */
     fun writeText(text: String) {
-        AnsiParser(buffer).feed(text)
+        parser.feed(text)
         postInvalidate()
     }
 

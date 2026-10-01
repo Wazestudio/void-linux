@@ -23,7 +23,7 @@ class FileGuard(
         if (!watchDir.isDirectory) return
 
         observer?.stopWatching()
-        observer = object : FileObserver(watchDir, CREATE or MOVED_TO or CLOSE_WRITE) {
+        observer = object : FileObserver(watchDir, FileObserver.CREATE or FileObserver.MOVED_TO or FileObserver.CLOSE_WRITE) {
             override fun onEvent(event: Int, path: String?) {
                 path ?: return
                 val file = File(watchDir, path)

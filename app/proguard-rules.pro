@@ -32,3 +32,13 @@
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes Exceptions
+
+# commons-compress / xz : classes optionnelles absentes sur Android (sinon R8 échoue)
+-dontwarn org.apache.commons.compress.**
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn org.brotli.dec.**
+-dontwarn org.objectweb.asm.**
+-dontwarn javax.annotation.**
+-keep class org.apache.commons.compress.archivers.** { *; }
+-keep class org.apache.commons.compress.compressors.** { *; }
