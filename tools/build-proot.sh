@@ -24,13 +24,19 @@ git -C "$WORK_DIR" checkout --quiet "$TERMUX_PACKAGES_REF"
 
 cd "$WORK_DIR"
 
-# CORRECTION UNIQUE POUR GITHUB ACTIONS : 
-# On supprime le 'origin' local pour empêcher le script run-docker.sh de lire une mauvaise URL via git remote,
-# et on injecte proprement la variable d'environnement attendue.
-git remote remove origin || true
-export TERMUX_PACKAGES_URL="https://github.com"
+# --- SOLUTION RADICALE POUR CASSER LE BUG GIT DE TERMUX ---
+# On supprime physiquement le dossier .git de l'espace de travail temporaire.
+# Sans le dossier .git, le script 'run-docker.sh' est forcé de basculer sur son mode 
+# "hors-dépôt" et utilisera obligatoirement les variables d'environnement définies ci-dessous.
+rm -rf .git
 
-# 2. Compilation locale de PRoot avec génération forcée du .deb
+export TERMUX_PACKAGES_URL="https://github.com"
+export TERMUX_PACKAGES_REVISION="master"
+
+# 2. Compilation de PRoot en injectant explicitement les variables dans l'environnement du script
+echo "Démarrage de la compilation PRoot dans Docker..."
+TERMUX_PACKAGES_URL="https://github.com" \
+TERMUX_PACKAGES_REVISION="master" \
 ./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
 
 # 3. Téléchargement direct des dépendances officielles via leurs vraies URL de dépôt
