@@ -10,7 +10,7 @@ case "$ARCH" in
     arm64)
         URL="https://kali.download/nethunter-images/current/rootfs/kali-nethunter-rootfs-minimal-arm64.tar.xz"
         FILENAME="kali-arm64.tar.xz"
-        DEFAULT_SHA256="54d0387bfd011a9d2a81286b2442dddb79464dee49260aeaabec2280f53b2578"
+        DEFAULT_SHA256="d6403a5da175df325611d23af4b92330856059c45454eced7f4cdf3ca6df2e4e"
         ;;
     armhf)
         URL="https://kali.download/nethunter-images/current/rootfs/kali-nethunter-rootfs-minimal-armhf.tar.xz"
