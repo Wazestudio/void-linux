@@ -24,7 +24,10 @@ git -C "$WORK_DIR" checkout --quiet "$TERMUX_PACKAGES_REF"
 
 cd "$WORK_DIR"
 
-# CORRECTION CRITIQUE : On force l'URL pour empêcher le script Termux de planter en essayant de la deviner
+# CORRECTION UNIQUE POUR GITHUB ACTIONS : 
+# On supprime le 'origin' local pour empêcher le script run-docker.sh de lire une mauvaise URL via git remote,
+# et on injecte proprement la variable d'environnement attendue.
+git remote remove origin || true
 export TERMUX_PACKAGES_URL="https://github.com"
 
 # 2. Compilation locale de PRoot avec génération forcée du .deb
