@@ -44,6 +44,12 @@
         <item name="strokeWidth">1dp</item>
     </style>
 
+   
+    <style name="VoidText">
+        <item name="android:textColor">@color/void_text</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
     <style name="VoidText.Title">
         <item name="android:textColor">@color/void_text</item>
         <item name="android:textSize">20sp</item>
