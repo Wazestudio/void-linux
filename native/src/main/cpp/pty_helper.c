@@ -48,7 +48,7 @@ static int android_openpty(int *amaster, int *aslave, struct winsize *winp) {
 }
 
 JNIEXPORT jintArray JNICALL
-Java_com_voidlinux_core_1native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
+Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
                                                      jint cols, jint rows) {
     int master, slave;
     struct winsize ws;
@@ -79,7 +79,7 @@ Java_com_voidlinux_core_1native_NativeBridge_createPty(JNIEnv *env, jclass clazz
 }
 
 JNIEXPORT void JNICALL
-Java_com_voidlinux_core_1native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
+Java_com_voidlinux_core_native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
                                                      jint fd, jint cols, jint rows) {
     struct winsize ws;
     ws.ws_col = (unsigned short) (cols > 0 ? cols : 80);
@@ -90,6 +90,6 @@ Java_com_voidlinux_core_1native_NativeBridge_resizePty(JNIEnv *env, jclass clazz
 }
 
 JNIEXPORT void JNICALL
-Java_com_voidlinux_core_1native_NativeBridge_closePty(JNIEnv *env, jclass clazz, jint fd) {
+Java_com_voidlinux_core_native_NativeBridge_closePty(JNIEnv *env, jclass clazz, jint fd) {
     if (fd >= 0) close(fd);
 }

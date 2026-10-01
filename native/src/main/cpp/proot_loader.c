@@ -12,9 +12,22 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <android/log.h>
 #include <errno.h>
 #include <elf.h>
+
+/*
+ * memfd_create() n'est déclarée dans la libc Android qu'à partir de l'API 30,
+ * alors que minSdk = 29. On passe donc par l'appel système directement.
+ */
+#ifndef MFD_CLOEXEC
+#define MFD_CLOEXEC 0x0001U
+#endif
+
+static int void_memfd_create(const char *name, unsigned int flags) {
+    return (int) syscall(__NR_memfd_create, name, flags);
+}
 
 #define LOG_TAG "VoidProotLoader"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
@@ -56,7 +69,7 @@ static int load_elf_to_memfd(const char *path) {
     }
 
     // Créer un memfd
-    int memfd = memfd_create("proot_loader", MFD_CLOEXEC);
+    int memfd = void_memfd_create("proot_loader", MFD_CLOEXEC);
     if (memfd < 0) {
         LOGE("memfd_create : %s", strerror(errno));
         munmap(mem, size);
