@@ -4,7 +4,8 @@ plugins {
 }
 
 android {
-    namespace = "com.voidlinux.core.native"
+    // CORRECTION : "native" est un mot-clé réservé en Java. Remplacé par "core_native"
+    namespace = "com.voidlinux.core_native"
     compileSdk = 34
 
     defaultConfig {
