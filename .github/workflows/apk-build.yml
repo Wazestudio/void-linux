@@ -42,6 +42,12 @@ jobs:
         with:
           gradle-version: 8.7
 
+      # SÉCURITÉ INFRASTRUCTURE : Génération obligatoire du wrapper gradlew pour éviter l'erreur 127
+      - name: Generate and Secure Gradle Wrapper
+        run: |
+          gradle wrapper
+          chmod +x gradlew
+
       - name: Cache CMake build
         uses: actions/cache@v4
         with:
@@ -53,6 +59,7 @@ jobs:
       - name: Generate mipmap icons
         run: |
           if [ -f tools/generate-mipmaps.sh ]; then
+            chmod +x tools/generate-mipmaps.sh
             bash tools/generate-mipmaps.sh
           else
             echo "::warning::Pas de script generate-mipmaps.sh — skip"
@@ -62,13 +69,15 @@ jobs:
         run: |
           if [ -f tools/fetch-kali-rootfs.sh ]; then
             set -e
+            chmod +x tools/fetch-kali-rootfs.sh
             bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
           else
             echo "::warning::Pas de script fetch-kali-rootfs.sh — skip"
           fi
 
+      # COMPILATION COMPLÈTE : Correction de l'erreur 127 ET acceptation des conditions d'utilisation
       - name: Build APKs (Debug & Release)
-        run: gradle assembleDebug assembleRelease --stacktrace --no-daemon
+        run: ./gradlew assembleDebug assembleRelease --stacktrace --no-daemon --info --scan -Dscan.termsOfUseUrl="https://gradle.com" -Dscan.termsOfUseAgree=yes
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
