@@ -10,6 +10,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class LinuxSession(
     private val context: Context,
@@ -43,6 +45,11 @@ class LinuxSession(
             "libandroid-shmem.so"
         ).firstOrNull { !File(nativeLibraries, it).isFile }
         val shell = distro?.defaultShell ?: "/bin/bash"
+        val loginShell = if (distroId == Constants.DISTRO_KALI) {
+            "/usr/local/sbin/void-kali-login"
+        } else {
+            shell
+        }
         if (distro == null || !rootfs.isDirectory ||
             !File(rootfs, shell.removePrefix("/")).isFile || !proot.isFile ||
             missingRuntimeLibrary != null
@@ -70,10 +77,8 @@ class LinuxSession(
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "PS1=\\u@kali:\\w# ",
             "DEBIAN_FRONTEND=noninteractive",
-            shell,
-            "--noprofile",
-            "--norc",
-            "-i"
+            loginShell
+
         )
         val prootCommand = buildList {
             add(proot.absolutePath)
@@ -111,6 +116,7 @@ class LinuxSession(
                     File(context.applicationInfo.nativeLibraryDir, "libproot_loader.so").absolutePath
                 )
                 put("PROOT_TMP_DIR", prootTemp.absolutePath)
+                applyNetworkRoute(this)
             }
             val pid = NativeBridge.execInPty(
                 master,
@@ -169,6 +175,60 @@ class LinuxSession(
             running = false
             onError("Le moteur natif du terminal est absent ou incompatible : ${e.message}")
             onExit(-1)
+        }
+    }
+
+    /** Configure le proxy de la session Linux sans modifier les routes Android globales. */
+    private fun applyNetworkRoute(environment: MutableMap<String, String>) {
+        val prefs = context.getSharedPreferences("void_network", Context.MODE_PRIVATE)
+        val route = prefs.getString(Constants.NETWORK_ROUTE_PREF, Constants.NETWORK_ROUTE_DIRECT)
+            ?: Constants.NETWORK_ROUTE_DIRECT
+
+        fun clearProxy() {
+            listOf("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")
+                .forEach(environment::remove)
+        }
+
+        when (route) {
+            Constants.NETWORK_ROUTE_DIRECT -> clearProxy()
+            Constants.NETWORK_ROUTE_TOR -> {
+                val port = Constants.TOR_SOCKS_PORT
+                if (!isPortOpen("127.0.0.1", port)) {
+                    throw IllegalStateException("Tor indisponible sur 127.0.0.1:$port")
+                }
+                setProxy(environment, "socks5h://127.0.0.1:$port")
+            }
+            Constants.NETWORK_ROUTE_SOCKS5 -> {
+                val host = prefs.getString(Constants.NETWORK_PROXY_HOST_PREF, "127.0.0.1")
+                    ?: "127.0.0.1"
+                val port = prefs.getInt(Constants.NETWORK_PROXY_PORT_PREF, Constants.TOR_SOCKS_PORT)
+                require(port in 1..65535) { "Port SOCKS5 invalide : $port" }
+                if (!isPortOpen(host, port)) {
+                    throw IllegalStateException("Proxy SOCKS5 indisponible sur $host:$port")
+                }
+                setProxy(environment, "socks5h://$host:$port")
+            }
+            else -> throw IllegalStateException("Mode réseau inconnu : $route")
+        }
+    }
+
+    private fun setProxy(environment: MutableMap<String, String>, proxy: String) {
+        environment["ALL_PROXY"] = proxy
+        environment["all_proxy"] = proxy
+        environment["HTTP_PROXY"] = proxy
+        environment["HTTPS_PROXY"] = proxy
+        environment["http_proxy"] = proxy
+        environment["https_proxy"] = proxy
+        environment["NO_PROXY"] = "127.0.0.1,localhost"
+        environment["no_proxy"] = "127.0.0.1,localhost"
+    }
+
+    private fun isPortOpen(host: String, port: Int): Boolean {
+        return try {
+            Socket().use { it.connect(InetSocketAddress(host, port), 1500) }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

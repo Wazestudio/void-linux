@@ -40,12 +40,16 @@ class LinuxInstaller(
         try {
             host.tmpDir.mkdirs()
             if (!archive.isFile || archive.length() == 0L) {
-                downloadFile(distro.url, partialArchive) { progress ->
+                if (!copyBundledRootfsIfAvailable(distro, partialArchive)) {
+                    downloadFile(distro.url, partialArchive) { progress ->
                     notifier.update(distro.displayName, progress / 2)
                     onProgress(progress / 2)
-                }
-                if (!partialArchive.renameTo(archive)) {
-                    throw IOException("Impossible de finaliser le téléchargement")
+                    }
+                    if (!partialArchive.renameTo(archive)) {
+                        throw IOException("Impossible de finaliser le téléchargement")
+                    }
+                } else if (!partialArchive.renameTo(archive)) {
+                    throw IOException("Impossible de préparer le rootfs intégré")
                 }
             }
 
@@ -72,6 +76,7 @@ class LinuxInstaller(
                 if (backupDir.exists()) backupDir.renameTo(targetDir)
                 throw IOException("Impossible de finaliser l'installation Linux")
             }
+            installKaliToolBootstrap(targetDir)
             backupDir.deleteRecursively()
             archive.delete()
             onProgress(100)
@@ -83,6 +88,24 @@ class LinuxInstaller(
             archive.delete()
             notifier.showError(distro.displayName, e.message ?: "Erreur inconnue")
             VoidResult.Error("Échec de l'installation Kali", e)
+        }
+    }
+
+    private fun copyBundledRootfsIfAvailable(
+        distro: DistroCatalog.Distro,
+        target: File
+    ): Boolean {
+        if (distro.id != Constants.DISTRO_KALI) return false
+        val assetName = "kali-arm64.tar.xz"
+        return try {
+            context.assets.open(assetName).use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output, 64 * 1024)
+                }
+            }
+            target.isFile && target.length() > 0L
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -281,6 +304,34 @@ class LinuxInstaller(
     private fun applyMode(file: File, mode: Int, isDirectory: Boolean = false) {
         val ownerAccess = if (isDirectory) 0x1c0 else 0x180
         Os.chmod(file.absolutePath, (mode and 0x1ff) or ownerAccess)
+    }
+
+    private fun installKaliToolBootstrap(rootfs: File) {
+        val script = File(rootfs, "usr/local/sbin/void-kali-tools")
+        script.parentFile?.mkdirs()
+        script.writeText("""#!/bin/bash
+set -e
+export DEBIAN_FRONTEND=noninteractive
+mkdir -p /var/lib/void-linux
+if [ -f /var/lib/void-linux/.tools-ready ]; then
+    exit 0
+fi
+printf '%s\n' '[Void-Linux] Initialisation des paquets Kali...'
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates gnupg
+apt-get install -y kali-linux-default tor
+touch /var/lib/void-linux/.tools-ready
+printf '%s\n' '[Void-Linux] Paquets Kali installés.'
+""".trimIndent())
+        Os.chmod(script.absolutePath, 0x1ed)
+
+        val login = File(rootfs, "usr/local/sbin/void-kali-login")
+        login.writeText("""#!/bin/bash
+set -e
+/usr/local/sbin/void-kali-tools
+exec /bin/bash --noprofile --norc -i
+""".trimIndent())
+        Os.chmod(login.absolutePath, 0x1ed)
     }
 
     fun isInstalled(distro: String): Boolean {
