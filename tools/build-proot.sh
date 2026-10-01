@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")/.." && pwd)"
 WORK_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/void-linux-termux-packages"
 OUTPUT_DIR="$ROOT_DIR/native/src/main/jniLibs/arm64-v8a"
 TERMUX_PACKAGES_REF="2d31765cdab30bbf92f87c495bef6b963df168e5"
@@ -23,6 +23,9 @@ echo "Alignement sur le commit spécifié..."
 git -C "$WORK_DIR" checkout --quiet "$TERMUX_PACKAGES_REF"
 
 cd "$WORK_DIR"
+
+# CORRECTION CRITIQUE : On force l'URL pour empêcher le script Termux de planter en essayant de la deviner
+export TERMUX_PACKAGES_URL="https://github.com"
 
 # 2. Compilation locale de PRoot avec génération forcée du .deb
 ./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
