@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <termios.h>
 #include <sys/ioctl.h>
 #include <android/log.h>
 
@@ -16,7 +17,7 @@
 // Implémentation alternative de openpty pour la libc Android (bionic)
 static int android_openpty(int *amaster, int *aslave, struct winsize *winp) {
     int master, slave;
-    char *slave_name;
+    char slave_name[64];
 
     master = posix_openpt(O_RDWR | O_NOCTTY);
     if (master < 0) return -1;
@@ -26,8 +27,7 @@ static int android_openpty(int *amaster, int *aslave, struct winsize *winp) {
         return -1;
     }
 
-    slave_name = ptsname(master);
-    if (slave_name == NULL) {
+    if (ptsname_r(master, slave_name, sizeof(slave_name)) != 0) {
         close(master);
         return -1;
     }
@@ -47,7 +47,6 @@ static int android_openpty(int *amaster, int *aslave, struct winsize *winp) {
     return 0;
 }
 
-// CORRECTION JNI : Utilisation du package core_native conforme au build.gradle.kts
 JNIEXPORT jintArray JNICALL
 Java_com_voidlinux_core_1native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
                                                      jint cols, jint rows) {
@@ -79,17 +78,17 @@ Java_com_voidlinux_core_1native_NativeBridge_createPty(JNIEnv *env, jclass clazz
     return result;
 }
 
-// CORRECTION JNI : Package mis à jour en core_1native
 JNIEXPORT void JNICALL
 Java_com_voidlinux_core_1native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
                                                      jint fd, jint cols, jint rows) {
     struct winsize ws;
     ws.ws_col = (unsigned short) (cols > 0 ? cols : 80);
     ws.ws_row = (unsigned short) (rows > 0 ? rows : 24);
+    ws.ws_xpixel = 0;
+    ws.ws_ypixel = 0;
     ioctl(fd, TIOCSWINSZ, &ws);
 }
 
-// CORRECTION JNI : Package mis à jour en core_1native
 JNIEXPORT void JNICALL
 Java_com_voidlinux_core_1native_NativeBridge_closePty(JNIEnv *env, jclass clazz, jint fd) {
     if (fd >= 0) close(fd);
