@@ -15,18 +15,19 @@ if ! command -v dpkg-deb >/dev/null 2>&1 || ! command -v patchelf >/dev/null 2>&
     exit 1
 fi
 
+# 1. Clonage propre et alignement sur le commit spécifique
 rm -rf "$WORK_DIR"
-git init --quiet "$WORK_DIR"
-git -C "$WORK_DIR" remote add origin https://github.com
-git -C "$WORK_DIR" fetch --quiet --depth 1 origin "$TERMUX_PACKAGES_REF"
-git -C "$WORK_DIR" checkout --quiet FETCH_HEAD
+echo "Clonage du dépôt termux-packages..."
+git clone --quiet --depth=100 https://github.com "$WORK_DIR"
+echo "Alignement sur le commit spécifié..."
+git -C "$WORK_DIR" checkout --quiet "$TERMUX_PACKAGES_REF"
 
 cd "$WORK_DIR"
 
-# 1. On compile UNIQUEMENT proot. On utilise l'argument -f pour s'assurer que le .deb local soit généré.
+# 2. Compilation locale de PRoot avec génération forcée du .deb
 ./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
 
-# 2. Téléchargement direct des versions exactes de libtalloc et libandroid-shmem (gain de temps massif)
+# 3. Téléchargement direct des dépendances officielles via leurs vraies URL de dépôt
 echo "Téléchargement des dépendances pré-compilées..."
 curl -sL -o "libandroid-shmem_0.7_aarch64.deb" "https://termux.dev"
 curl -sL -o "libtalloc_2.4.3_aarch64.deb" "https://termux.dev"
