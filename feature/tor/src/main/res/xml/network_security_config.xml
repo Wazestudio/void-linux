@@ -6,6 +6,10 @@
         <domain includeSubdomains="true">localhost</domain>
     </domain-config>
 
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">onion</domain>
+    </domain-config>
+
     <!-- Bloque le cleartext pour le reste par défaut -->
     <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

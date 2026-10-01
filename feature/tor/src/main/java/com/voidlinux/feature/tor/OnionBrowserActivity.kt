@@ -2,9 +2,12 @@ package com.voidlinux.feature.tor
 
 import android.os.Bundle
 import android.view.inputmethod.EditorInfo
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.WebSettings
+import android.webkit.WebStorage
+import android.net.Uri
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ProgressBar
@@ -34,20 +37,29 @@ class OnionBrowserActivity : AppCompatActivity() {
         setupUrlBar()
         setupBackButton()
 
+        urlBar.setText("https://check.torproject.org")
         webView.loadUrl("https://check.torproject.org")
     }
 
     private fun setupWebView() {
         val settings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.databaseEnabled = true
-        settings.loadWithOverviewMode = true
-        settings.useWideViewPort = true
-        settings.builtInZoomControls = true
-        settings.displayZoomControls = false
-        settings.userAgentString = TorWebViewClient.USER_AGENT
-        settings.mediaPlaybackRequiresUserGesture = false
+        settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = false
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            cacheMode = WebSettings.LOAD_NO_CACHE
+            builtInZoomControls = true
+            displayZoomControls = false
+            mediaPlaybackRequiresUserGesture = true
+            allowFileAccess = false
+            allowContentAccess = false
+            javaScriptCanOpenWindowsAutomatically = false
+            setSupportMultipleWindows(false)
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
 
         webView.webViewClient = TorWebViewClient(socksPort = 9050)
 
@@ -82,12 +94,24 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun navigate(input: String) {
+        val value = input.trim()
+        if (value.isEmpty()) return
+
+        val hasScheme = SCHEME_PATTERN.containsMatchIn(value)
+        val candidate = if (hasScheme) value else "https://$value"
+        val parsed = Uri.parse(candidate)
         val url = when {
-            input.startsWith("http://") || input.startsWith("https://") -> input
-            input.endsWith(".onion") -> "http://$input"
-            input.contains(".") -> "https://$input"
-            else -> "https://duckduckgo.com/?q=$input"
+            hasScheme && parsed.scheme !in ALLOWED_SCHEMES -> {
+                urlBar.error = "Seules les URL HTTP(S) sont autorisées"
+                return
+            }
+            parsed.host?.endsWith(".onion", ignoreCase = true) == true && !hasScheme ->
+                "http://$value"
+            parsed.host != null -> candidate
+            else -> "https://duckduckgo.com/?q=${Uri.encode(value)}"
         }
+        urlBar.error = null
+        urlBar.setText(url)
         webView.loadUrl(url)
     }
 
@@ -97,7 +121,18 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        webView.clearHistory()
+        webView.clearCache(true)
         webView.destroy()
+        CookieManager.getInstance().removeAllCookies {
+            CookieManager.getInstance().flush()
+        }
+        WebStorage.getInstance().deleteAllData()
         super.onDestroy()
+    }
+
+    companion object {
+        private val SCHEME_PATTERN = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+        private val ALLOWED_SCHEMES = setOf("http", "https")
     }
 }

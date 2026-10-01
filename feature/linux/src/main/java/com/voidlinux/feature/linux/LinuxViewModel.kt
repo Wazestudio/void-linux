@@ -42,8 +42,9 @@ class LinuxViewModel(app: Application) : AndroidViewModel(app) {
             installed = installed,
             nativeReady = nativeReady,
             statusMessage = when {
-                !nativeReady -> "Binaires natifs manquants"
-                installed -> "${distro?.displayName} prêt"
+                installed && nativeReady -> "${distro?.displayName} installé — prêt"
+                installed -> "Kali est installé, mais le moteur PRoot Android manque"
+                !nativeReady -> "${distro?.displayName} peut être téléchargé; le moteur PRoot manque"
                 else -> "${distro?.displayName} non installé"
             },
             errorMessage = null
@@ -75,7 +76,11 @@ class LinuxViewModel(app: Application) : AndroidViewModel(app) {
                     installing = false,
                     installed = true,
                     progress = 100,
-                    statusMessage = "${_uiState.value.distroName} installé ✅"
+                    statusMessage = if (_uiState.value.nativeReady) {
+                        "${_uiState.value.distroName} installé — prêt"
+                    } else {
+                        "Kali téléchargé; le moteur PRoot Android manque encore"
+                    }
                 )
                 is VoidResult.Error -> _uiState.value.copy(
                     installing = false,

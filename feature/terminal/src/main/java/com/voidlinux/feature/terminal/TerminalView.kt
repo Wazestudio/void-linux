@@ -8,6 +8,10 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.inputmethod.BaseInputConnection
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.text.InputType
 import kotlin.math.ceil
 
 /**
@@ -51,6 +55,26 @@ class TerminalView @JvmOverloads constructor(
 
     /** Callback pour signaler un redimensionnement */
     var onResize: ((cols: Int, rows: Int) -> Unit)? = null
+
+    override fun onCheckIsTextEditor(): Boolean = true
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        return object : BaseInputConnection(this, false) {
+            override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                if (text != null) onInput?.invoke(text.toString())
+                return true
+            }
+
+            override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+                repeat(maxOf(beforeLength, afterLength).coerceAtMost(16)) {
+                    onInput?.invoke("\u007F")
+                }
+                return true
+            }
+        }
+    }
 
     init {
         setBackgroundColor(Color.BLACK)

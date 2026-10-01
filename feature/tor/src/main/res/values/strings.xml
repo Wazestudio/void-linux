@@ -6,8 +6,8 @@
     <string name="tor_running">Tor actif ✅</string>
     <string name="tor_stopped">Tor arrêté</string>
     <string name="tor_starting">Démarrage de Tor…</string>
-    <string name="tor_enable">Activer Tor</string>
-    <string name="tor_disable">Désactiver Tor</string>
+    <string name="tor_enable">Ouvrir Orbot pour démarrer Tor</string>
+    <string name="tor_disable">Gérer Orbot / arrêter Tor</string>
     <string name="tor_install_orbot">Installer Orbot</string>
     <string name="tor_browse_onion">Navigateur .onion</string>
 </resources>

@@ -11,8 +11,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
-        maven { url = uri("https://guardianproject.info/maven") }
     }
 }
 
@@ -22,6 +20,7 @@ include(":app")
 include(":core:common")
 include(":core:designsystem")
 include(":core:native")
+project(":core:native").projectDir = file("native")
 include(":core:data")
 include(":feature:linux")
 include(":feature:terminal")
@@ -31,3 +30,5 @@ include(":feature:security")
 include(":feature:location")
 include(":feature:settings")
 include(":library:proot-engine:proot-engine")
+project(":library:proot-engine").projectDir = file("library/proot-engin")
+project(":library:proot-engine:proot-engine").projectDir = file("library/proot-engin/proot-engine")

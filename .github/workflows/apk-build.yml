@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   build:
@@ -45,8 +44,8 @@ jobs:
       - name: Cache CMake build
         uses: actions/cache@v4
         with:
-          path: core/native/.cxx
-          key: cmake-${{ runner.os }}-${{ hashFiles('core/native/**/*.c', 'core/native/**/*.cpp', 'core/native/CMakeLists.txt') }}
+          path: native/.cxx
+          key: cmake-${{ runner.os }}-${{ hashFiles('native/src/main/cpp/**/*.c', 'native/src/main/cpp/**/*.cpp', 'native/CMakeLists.txt') }}
           restore-keys: |
             cmake-${{ runner.os }}-
 
@@ -58,14 +57,11 @@ jobs:
             echo "::warning::Pas de script generate-mipmaps.sh — skip"
           fi
 
-      - name: Download Kali rootfs
-        run: |
-          if [ -f tools/fetch-kali-rootfs.sh ]; then
-            set -e
-            bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
-          else
-            echo "::warning::Pas de script fetch-kali-rootfs.sh — skip"
-          fi
+      - name: Install PRoot packaging tools
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
+      - name: Build official Termux PRoot (ARM64)
+        run: bash tools/build-proot.sh
 
       - name: Build APKs (Debug & Release)
         run: gradle assembleDebug assembleRelease --stacktrace --no-daemon
@@ -91,6 +87,8 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4

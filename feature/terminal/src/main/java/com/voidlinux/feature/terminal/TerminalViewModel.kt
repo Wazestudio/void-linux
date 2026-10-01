@@ -34,16 +34,33 @@ class TerminalViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         if (!linuxRepo.isInstalled()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Kali Linux n'est pas installé"
+                errorMessage = "Kali Linux n'est pas installé. Installe-le depuis l'onglet Linux."
             )
             return
         }
 
         session?.stop()
-        session = TerminalSession(getApplication(), buffer, onOutput).also {
-            it.start("/bin/bash")
-            _uiState.value = _uiState.value.copy(sessionActive = true)
+        val terminal = TerminalSession(
+            getApplication(),
+            buffer,
+            onOutput,
+            { message ->
+                _uiState.value = _uiState.value.copy(errorMessage = message)
+            }
+        ) { exitCode ->
+            _uiState.value = _uiState.value.copy(sessionActive = false)
+            if (exitCode != 0 && _uiState.value.errorMessage == null) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "La session Kali s'est arrêtée (code $exitCode)."
+                )
+            }
         }
+        session = terminal
+        terminal.start()
+        _uiState.value = _uiState.value.copy(
+            sessionActive = terminal.isRunning,
+            errorMessage = if (terminal.isRunning) null else _uiState.value.errorMessage
+        )
     }
 
     fun writeInput(data: String) {

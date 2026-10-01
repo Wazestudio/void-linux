@@ -40,8 +40,11 @@ class LinuxHost(private val context: Context) {
     fun rootfsFor(distro: String): File = File(rootfsDir, distro)
 
     fun hasNativeBinaries(): Boolean {
-        val proot = File(nativeLibsDir, "libproot.so")
-        val loader = File(nativeLibsDir, "libproot_loader.so")
-        return proot.exists() && loader.exists()
+        return listOf(
+            "libproot.so",
+            "libproot_loader.so",
+            "libtalloc.so",
+            "libandroid-shmem.so"
+        ).all { File(nativeLibsDir, it).isFile }
     }
 }

@@ -1,3 +1,1 @@
-# Placeholder — déposer ici :
-# libproot.so
-# libproot_loader.so
+# PRoot runtime binaries are built by tools/build-proot.sh into :core:native.

@@ -10,9 +10,9 @@ navigation = "2.7.7"
 lifecycle = "2.8.4"
 coroutines = "1.8.1"
 fragment = "1.6.2"
-netcipher = "2.2.0-alpha"
-netcipherWebkit = "2.1.0"
 documentfile = "1.0.1"
+commonsCompress = "1.27.1"
+xz = "1.10"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -26,9 +26,9 @@ androidx-navigation-ui = { module = "androidx.navigation:navigation-ui-ktx", ver
 androidx-lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
-netcipher = { module = "info.guardianproject.netcipher:netcipher", version.ref = "netcipher" }
-netcipher-webkit = { module = "info.guardianproject.netcipher:netcipher-webkit", version.ref = "netcipherWebkit" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
+xz = { module = "org.tukaani:xz", version.ref = "xz" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

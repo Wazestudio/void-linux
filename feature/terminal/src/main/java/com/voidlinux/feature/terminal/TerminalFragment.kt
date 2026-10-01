@@ -8,6 +8,8 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
 import com.voidlinux.core.designsystem.Components
 import com.voidlinux.feature.terminal.databinding.FragmentTerminalBinding
 import kotlinx.coroutines.launch
@@ -49,6 +51,12 @@ class TerminalFragment : Fragment() {
             false
         }
         binding.terminalView.requestFocus()
+        viewModel.checkLinuxReady()
+        if (!viewModel.uiState.value.linuxReady) {
+            binding.terminalView.writeText(
+                "Kali n'est pas installé. Ouvre l'onglet Linux pour télécharger le rootfs.\r\n"
+            )
+        }
 
         binding.keyEsc.setOnClickListener { viewModel.writeInput("\u001B") }
         binding.keyTab.setOnClickListener { viewModel.writeInput("\t") }
@@ -62,16 +70,16 @@ class TerminalFragment : Fragment() {
             viewModel.startSession(buffer) { text ->
                 activity?.runOnUiThread { binding.terminalView.writeText(text) }
             }
+            binding.terminalView.post {
+                val inputMethod = requireContext()
+                    .getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                inputMethod.showSoftInput(binding.terminalView, InputMethodManager.SHOW_IMPLICIT)
+            }
         }
         binding.keyStop.setOnClickListener { viewModel.stopSession() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
-                if (!state.linuxReady) {
-                    binding.terminalView.writeText(
-                        "\r\n[Void-Linux] Terminal prêt.\r\n"
-                    )
-                }
                 state.errorMessage?.let { msg ->
                     Components.showSnackLong(binding.root, msg)
                     viewModel.clearError()

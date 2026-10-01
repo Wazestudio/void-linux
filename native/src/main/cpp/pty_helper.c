@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pty.h>
-#include <termios.h>
 #include <sys/ioctl.h>
 #include <android/log.h>
 
@@ -21,8 +20,8 @@ Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
     int master, slave;
     struct winsize ws;
 
-    ws.ws_col = (unsigned short) cols;
-    ws.ws_row = (unsigned short) rows;
+    ws.ws_col = (unsigned short) (cols > 0 ? cols : 80);
+    ws.ws_row = (unsigned short) (rows > 0 ? rows : 24);
     ws.ws_xpixel = 0;
     ws.ws_ypixel = 0;
 
@@ -30,14 +29,15 @@ Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
         LOGI("openpty échoué");
         return NULL;
     }
-
-    // Raw mode sur le slave
-    struct termios tios;
-    tcgetattr(slave, &tios);
-    cfmakeraw(&tios);
-    tcsetattr(slave, TCSANOW, &tios);
+    fcntl(master, F_SETFD, FD_CLOEXEC);
+    fcntl(slave, F_SETFD, FD_CLOEXEC);
 
     jintArray result = (*env)->NewIntArray(env, 2);
+    if (!result) {
+        close(master);
+        close(slave);
+        return NULL;
+    }
     jint values[2] = { master, slave };
     (*env)->SetIntArrayRegion(env, result, 0, 2, values);
 
@@ -49,8 +49,8 @@ JNIEXPORT void JNICALL
 Java_com_voidlinux_core_native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
                                                      jint fd, jint cols, jint rows) {
     struct winsize ws;
-    ws.ws_col = (unsigned short) cols;
-    ws.ws_row = (unsigned short) rows;
+    ws.ws_col = (unsigned short) (cols > 0 ? cols : 80);
+    ws.ws_row = (unsigned short) (rows > 0 ? rows : 24);
     ioctl(fd, TIOCSWINSZ, &ws);
 }
 

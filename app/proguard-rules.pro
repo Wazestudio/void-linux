@@ -15,10 +15,6 @@
 -keep class com.voidlinux.core.common.** { *; }
 -keep class com.voidlinux.feature.**.model.** { *; }
 
-# Garder NetCipher
--keep class info.guardianproject.netcipher.** { *; }
--dontwarn info.guardianproject.netcipher.**
-
 # Garder Orbot
 -keep class org.torproject.android.** { *; }
 -dontwarn org.torproject.android.**

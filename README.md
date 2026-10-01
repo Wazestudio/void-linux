@@ -15,37 +15,55 @@ Terminal Linux On Android
   <img src="https://img.shields.io/badge/Kali-Linux-blue?style=flat-square" />
   <img src="https://img.shields.io/badge/Kotlin-1.9-purple?style=flat-square" />
   <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" />
-  <img src="https://img.shields.io/github/actions/workflow/status/VOTRE_USER/Void-Linux/build.yml?style=flat-square" />
+  <img src="https://img.shields.io/github/actions/workflow/status/Wazestudio/void-linux/apk-build.yml?style=flat-square" />
 </p>
 
 ---
 
 ## 🌌 Qu'est-ce que Void-Linux ?
 
-**Void-Linux** est une application Android qui transforme ton téléphone en
-un véritable environnement de travail pour la cybersécurité. Elle intègre
-nativement :
+**Void-Linux** est une application Android organisée en plusieurs modules,
+notamment pour Kali/PRoot, le terminal et Tor. Leur niveau de finition et de
+validation varie; les fonctions listées dans le dépôt ne sont pas toutes
+garanties comme opérationnelles. Consulte le
+[guide complet en français](docs/FONCTIONNEMENT.md) avant de les utiliser.
 
-- 🐉 **Kali Linux** installé automatiquement via `proot` (sans root)
-- 💻 **Terminal complet** avec support ANSI/VT100
-- 🪟 **Émulation Windows** via Wine + Box64 (exécution de `.exe`)
-- 🧅 **Réseau Tor** et navigation `.onion` sécurisée
-- 🛡️ **Surveillance de sécurité** en temps réel
-- 📍 **Fausse position GPS** pour préserver ta vie privée
+> Pour le fonctionnement détaillé, les téléchargements, les prérequis, les
+> limites et l'état de validation des fonctionnalités, voir le
+> [guide complet en français](docs/FONCTIONNEMENT.md).
 
-Le tout dans une interface sombre, minimaliste et pensée pour les
-professionnels de la sécurité.
+- 🐉 Rootfs Kali minimal ARM64 installable avec PRoot (sans root Android)
+- 💻 Terminal intégré prévu pour une session Linux lorsque le moteur natif est présent
+- 🧅 Navigateur utilisant le proxy SOCKS d'Orbot; Orbot doit être installé séparément
+- 🧪 Écrans et composants expérimentaux pour Windows, sécurité et localisation
+
+Voir le guide pour les prérequis, les limites, les dépendances et les
+vérifications encore nécessaires.
 
 ---
 
 ## ✨ Fonctionnalités
 
-### 🐉 Linux auto-installé
+### 🐉 Environnement Linux
 
-- Kali Linux déployé automatiquement au premier lancement
-- Aucun root nécessaire (proot)
-- Support de Debian, Ubuntu, Alpine (extensible)
-- Gestionnaire de paquets `apt` fonctionnel
+- Téléchargement puis extraction du rootfs minimal Kali ARM64 dans le stockage privé de l'application
+- Aucun root Android requis; l'isolation du rootfs repose sur PRoot
+- Session shell interactive dans l'onglet Terminal
+- Installation des paquets Kali avec `apt`
+- L'installation du rootfs nécessite plusieurs Go d'espace libre et une connexion Internet
+
+Le rootfs Kali et le moteur PRoot Android sont deux éléments distincts. La CI construit PRoot
+et ses bibliothèques à partir des paquets officiels Termux avant de créer l'APK. Le support
+fourni actuellement est limité à ARM64.
+
+Exemple, dans le terminal Kali une fois PRoot fourni et le rootfs installé:
+
+```sh
+apt update
+apt install john nmap
+```
+
+N'utilise les outils que sur tes systèmes ou dans des laboratoires pour lesquels tu as une autorisation.
 
 ### 💻 Terminal intégré
 
@@ -63,10 +81,11 @@ professionnels de la sécurité.
 
 ### 🧅 Tor et Dark Web
 
-- Détection et démarrage d'Orbot
-- Proxy SOCKS global
-- Navigateur `.onion` intégré
-- User-Agent anti-fingerprinting
+- Détection d'Orbot et vérification réelle du proxy Tor via le service de contrôle Tor
+- Requêtes HTTP(S) du navigateur transmises par le proxy SOCKS local
+- Navigation `.onion` et moteur de recherche intégré
+- Blocage des requêtes réseau si le proxy Tor est indisponible
+- Session privée : cookies tiers refusés et cookies effacés à la fermeture
 
 ### 🛡️ Sécurité
 
@@ -97,35 +116,30 @@ professionnels de la sécurité.
 ### Téléchargement direct
 
 Récupère la dernière version depuis
-<<<<<<< HEAD
-[**Releases**](https://github.com/VOTRE_USER/Void-Linux/releases).
-=======
-[**Releases**](https://github.com/Wazestudio/void-Linux/releases).
->>>>>>> 5657826d0e16b81cb87f9483952d3a71c90a152a
+[**Releases**](https://github.com/Wazestudio/void-linux/releases).
 
 ### Compilation depuis les sources
 
 ```bash
 # Clone
-<<<<<<< HEAD
-git clone https://github.com/VOTRE_USER/Void-Linux.git
-=======
-git clone https://github.com/Wazestudio/void-Linux.git
->>>>>>> 5657826d0e16b81cb87f9483952d3a71c90a152a
-cd Void-Linux
+git clone https://github.com/Wazestudio/void-linux.git
+cd void-linux
+
+# Construit PRoot ARM64 depuis les sources Termux officielles
+bash tools/build-proot.sh
 
 # Génère les icônes mipmap
 bash tools/generate-mipmaps.sh
 
-# Télécharge le rootfs Kali (optionnel)
-bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
-
 # Build
-./gradlew assembleDebug
+gradle assembleDebug
 
 # APK généré dans :
 # app/build/outputs/apk/debug/app-debug.apk
 ```
+
+La compilation locale de PRoot requiert Docker, `dpkg-deb` et `patchelf`.
+Sur Windows, exécute ces commandes dans WSL2 avec Docker Desktop.
 
 ---
 
@@ -163,7 +177,7 @@ Outil Version
 Android SDK API 34
 NDK r25c+
 JDK 17
-Gradle 8.5+
+Gradle 8.7+
 Kotlin 1.9.24
 
 ---
@@ -185,7 +199,8 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-L'APK sera automatiquement attaché à la release GitHub.
+L'APK sera automatiquement attaché à la release GitHub. La CI y inclut PRoot et ses bibliothèques
+ARM64, puis le terminal démarre une session Kali interactive avec PTY.
 
 ---
 
@@ -231,7 +246,9 @@ MIT License — voir LICENSE pour plus de détails.
 
 · Kali Linux — Distribution de pentesting
 · Termux — Environnement Linux Android
-· PRoot — Émulation de root sans root
+· Termux PRoot — Émulation de root sans root (GPL-2.0)
+· libtalloc — Bibliothèque de gestion mémoire requise par PRoot (GPL-3.0)
+· libandroid-shmem — Compatibilité mémoire partagée Android (BSD-3-Clause)
 · Wine — Couche de compatibilité Windows
 · Box64 — Émulateur x86_64
 · Tor Project — Anonymat réseau

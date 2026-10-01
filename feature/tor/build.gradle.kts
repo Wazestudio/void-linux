@@ -36,7 +36,4 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.android)
-
-    // netcipher-webkit embarque déjà netcipher
-    implementation(libs.netcipher.webkit)
 }

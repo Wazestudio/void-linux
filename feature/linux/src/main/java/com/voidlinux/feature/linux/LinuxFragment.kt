@@ -55,7 +55,7 @@ class LinuxFragment : Fragment() {
                 binding.progressBar.progress = state.progress
 
                 binding.installButton.isEnabled =
-                    !state.installing && !state.installed && state.nativeReady
+                    !state.installing && !state.installed
                 binding.uninstallButton.isEnabled =
                     !state.installing && state.installed
                 binding.nativeWarning.visibility =

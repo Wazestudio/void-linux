@@ -79,7 +79,7 @@
             android:layout_marginTop="@dimen/space_m"
             android:padding="@dimen/space_m"
             android:background="@color/void_surface_variant"
-            android:text="⚠ Binaires proot manquants — vérifier library/proot-engine/src/main/jniLibs/"
+            android:text="⚠ Moteur PRoot Android absent : le rootfs peut être installé, mais le terminal ne démarrera pas."
             android:textColor="@color/void_warning"
             android:textSize="13sp"
             android:visibility="gone" />

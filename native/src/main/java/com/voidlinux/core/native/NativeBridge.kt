@@ -22,7 +22,17 @@ object NativeBridge {
 
     // --- Terminal ---
 
-    external fun execInPty(masterFd: Int, command: String): Int
+    external fun execInPty(
+        masterFd: Int,
+        slaveFd: Int,
+        arguments: Array<String>,
+        environment: Array<String>,
+        workingDirectory: String
+    ): Int
+
+    external fun waitForProcess(pid: Int): Int
+
+    external fun killProcess(pid: Int)
 
     external fun writeToPty(fd: Int, data: ByteArray): Int
 

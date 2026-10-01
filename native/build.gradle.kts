@@ -10,7 +10,7 @@ android {
     defaultConfig {
         minSdk = 29
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
         externalNativeBuild {
             cmake {
@@ -26,6 +26,8 @@ android {
             version = "3.22.1"
         }
     }
+
+    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -1,60 +1,39 @@
 package com.voidlinux.feature.terminal
 
 import android.content.Context
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import com.voidlinux.core.common.Constants
+import com.voidlinux.feature.linux.LinuxSession
 
-/**
- * Session terminal simplifiée.
- * À terme : PTY natif via NativeBridge et proot-engine.
- */
 class TerminalSession(
-    private val context: Context,
+    context: Context,
     private val buffer: TerminalBuffer,
-    private val onOutput: (String) -> Unit
+    onOutput: (String) -> Unit,
+    onError: (String) -> Unit,
+    onExit: (Int) -> Unit
 ) {
 
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
-    private var readerJob: Job? = null
+    private val linuxSession = LinuxSession(
+        context = context,
+        distroId = Constants.DISTRO_KALI,
+        onOutput = onOutput,
+        onError = onError,
+        onExit = onExit
+    )
 
-    var isRunning: Boolean = false
-        private set
+    val isRunning: Boolean
+        get() = linuxSession.isRunning()
 
-    fun start(command: String) {
-        if (isRunning) return
-        isRunning = true
-
-        scope.launch {
-            onOutput("\r\n[Void-Linux] Terminal placeholder\r\n")
-            onOutput("$ ")
-        }
+    fun start() {
+        linuxSession.resize(buffer.cols, buffer.rows)
+        linuxSession.start()
     }
 
-    fun write(data: String) {
-        if (!isRunning) return
-        scope.launch {
-            // Echo simple en attendant le PTY natif
-            if (data == "\r" || data == "\n") {
-                onOutput("\r\n$ ")
-            } else if (data == "\u007F") {
-                onOutput("\b \b")
-            } else {
-                onOutput(data)
-            }
-        }
-    }
+    fun write(data: String) = linuxSession.write(data)
 
     fun resize(cols: Int, rows: Int) {
         buffer.resize(cols, rows)
+        linuxSession.resize(cols, rows)
     }
 
-    fun stop() {
-        isRunning = false
-        readerJob?.cancel()
-        readerJob = null
-    }
+    fun stop() = linuxSession.stop()
 }
