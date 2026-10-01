@@ -67,8 +67,10 @@ jobs:
             echo "::warning::Pas de script fetch-kali-rootfs.sh — skip"
           fi
 
+        
       - name: Build APKs (Debug & Release)
-        run: gradle assembleDebug assembleRelease --stacktrace --no-daemon
+        run: ./gradlew assembleDebug assembleRelease --stacktrace --no-daemon --info --scan -Dscan.termsOfUseUrl="https://gradle.com" -Dscan.termsOfUseAgree=yes
+
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
