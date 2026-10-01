@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/void-linux-termux-packages"
 OUTPUT_DIR="$ROOT_DIR/native/src/main/jniLibs/arm64-v8a"
 TERMUX_PACKAGES_REF="2d31765cdab30bbf92f87c495bef6b963df168e5"
+
+# Vraies adresses officielles
+TERMUX_PACKAGES_REPO="https://github.com/termux/termux-packages"
+TERMUX_APT_BASE="https://packages.termux.dev/apt/termux-main"
 
 if ! command -v docker >/dev/null 2>&1; then
     echo "Docker is required to build the official Termux PRoot package." >&2
@@ -18,31 +22,53 @@ fi
 # 1. Clonage propre et alignement sur le commit spécifique
 rm -rf "$WORK_DIR"
 echo "Clonage du dépôt termux-packages..."
-git clone --quiet --depth=100 https://github.com "$WORK_DIR"
+git clone --quiet --filter=blob:none "$TERMUX_PACKAGES_REPO" "$WORK_DIR"
 echo "Alignement sur le commit spécifié..."
 git -C "$WORK_DIR" checkout --quiet "$TERMUX_PACKAGES_REF"
 
 cd "$WORK_DIR"
 
-# --- SOLUTION RADICALE POUR CASSER LE BUG GIT DE TERMUX ---
-# On supprime physiquement le dossier .git de l'espace de travail temporaire.
-# Sans le dossier .git, le script 'run-docker.sh' est forcé de basculer sur son mode 
-# "hors-dépôt" et utilisera obligatoirement les variables d'environnement définies ci-dessous.
-rm -rf .git
-
-export TERMUX_PACKAGES_URL="https://github.com"
+export TERMUX_PACKAGES_URL="$TERMUX_PACKAGES_REPO"
 export TERMUX_PACKAGES_REVISION="master"
 
-# 2. Compilation de PRoot en injectant explicitement les variables dans l'environnement du script
+# 2. Compilation de PRoot dans Docker
 echo "Démarrage de la compilation PRoot dans Docker..."
-TERMUX_PACKAGES_URL="https://github.com" \
-TERMUX_PACKAGES_REVISION="master" \
 ./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
 
-# 3. Téléchargement direct des dépendances officielles via leurs vraies URL de dépôt
+# 3. Téléchargement des dépendances officielles
+# On lit l'index officiel Termux pour trouver le nom exact du fichier (pas de version devinée).
 echo "Téléchargement des dépendances pré-compilées..."
-curl -sL -o "libandroid-shmem_0.7_aarch64.deb" "https://termux.dev"
-curl -sL -o "libtalloc_2.4.3_aarch64.deb" "https://termux.dev"
+PACKAGES_INDEX="$WORK_DIR/Packages.index"
+curl -fsSL -o "$PACKAGES_INDEX" "$TERMUX_APT_BASE/dists/stable/main/binary-aarch64/Packages"
+
+download_termux_deb() {
+    local package="$1"
+    local filename
+    filename="$(awk -v pkg="$package" '
+        BEGIN { RS=""; FS="\n" }
+        {
+            found = 0
+            for (i = 1; i <= NF; i++) if ($i == "Package: " pkg) found = 1
+            if (found) {
+                for (i = 1; i <= NF; i++) {
+                    if ($i ~ /^Filename: /) {
+                        sub(/^Filename: /, "", $i)
+                        print $i
+                        exit
+                    }
+                }
+            }
+        }' "$PACKAGES_INDEX")"
+    if [[ -z "$filename" ]]; then
+        echo "Package not found in Termux index: $package" >&2
+        exit 1
+    fi
+    echo "  -> $package : $filename"
+    curl -fsSL -o "$WORK_DIR/$(basename "$filename")" "$TERMUX_APT_BASE/$filename"
+}
+
+download_termux_deb libandroid-shmem
+download_termux_deb libtalloc
 
 find_deb() {
     local pattern="$1"
@@ -58,7 +84,7 @@ find_deb() {
 STAGE_DIR="$WORK_DIR/proot-runtime"
 mkdir -p "$STAGE_DIR"
 
-# Extraction de PRoot (généré par Docker) et des librairies (téléchargées par curl)
+# Extraction de PRoot (généré par Docker) et des librairies (téléchargées)
 for package in proot libtalloc libandroid-shmem; do
     deb="$(find_deb "${package}_*_aarch64.deb")"
     dpkg-deb -x "$deb" "$STAGE_DIR"
