@@ -41,6 +41,7 @@ jobs:
         with:
           gradle-version: 8.7
 
+      # Optimisation du cache pour CMake
       - name: Cache CMake build
         uses: actions/cache@v4
         with:
@@ -48,6 +49,15 @@ jobs:
           key: cmake-${{ runner.os }}-${{ hashFiles('native/src/main/cpp/**/*.c', 'native/src/main/cpp/**/*.cpp', 'native/CMakeLists.txt') }}
           restore-keys: |
             cmake-${{ runner.os }}-
+
+      # NOUVEAU : Optimisation du cache pour l'image Docker de Termux Package Builder
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: docker-termux-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            docker-termux-${{ runner.os }}-
 
       - name: Generate mipmap icons
         run: |
@@ -57,8 +67,11 @@ jobs:
             echo "::warning::Pas de script generate-mipmaps.sh — skip"
           fi
 
+      # AJOUT : Installation explicite de dpkg (fournit dpkg-deb) en plus de patchelf
       - name: Install PRoot packaging tools
-        run: sudo apt-get update && sudo apt-get install -y patchelf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf dpkg curl
 
       - name: Build official Termux PRoot (ARM64)
         run: bash tools/build-proot.sh
