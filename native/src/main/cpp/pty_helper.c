@@ -7,15 +7,49 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <pty.h>
 #include <sys/ioctl.h>
 #include <android/log.h>
 
 #define LOG_TAG "VoidPty"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
+// Implémentation alternative de openpty pour la libc Android (bionic)
+static int android_openpty(int *amaster, int *aslave, struct winsize *winp) {
+    int master, slave;
+    char *slave_name;
+
+    master = posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0) return -1;
+
+    if (grantpt(master) < 0 || unlockpt(master) < 0) {
+        close(master);
+        return -1;
+    }
+
+    slave_name = ptsname(master);
+    if (slave_name == NULL) {
+        close(master);
+        return -1;
+    }
+
+    slave = open(slave_name, O_RDWR | O_NOCTTY);
+    if (slave < 0) {
+        close(master);
+        return -1;
+    }
+
+    if (winp) {
+        ioctl(slave, TIOCSWINSZ, winp);
+    }
+
+    *amaster = master;
+    *aslave = slave;
+    return 0;
+}
+
+// CORRECTION JNI : Utilisation du package core_native conforme au build.gradle.kts
 JNIEXPORT jintArray JNICALL
-Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
+Java_com_voidlinux_core_1native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
                                                      jint cols, jint rows) {
     int master, slave;
     struct winsize ws;
@@ -25,7 +59,7 @@ Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
     ws.ws_xpixel = 0;
     ws.ws_ypixel = 0;
 
-    if (openpty(&master, &slave, NULL, NULL, &ws) < 0) {
+    if (android_openpty(&master, &slave, &ws) < 0) {
         LOGI("openpty échoué");
         return NULL;
     }
@@ -45,8 +79,9 @@ Java_com_voidlinux_core_native_NativeBridge_createPty(JNIEnv *env, jclass clazz,
     return result;
 }
 
+// CORRECTION JNI : Package mis à jour en core_1native
 JNIEXPORT void JNICALL
-Java_com_voidlinux_core_native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
+Java_com_voidlinux_core_1native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
                                                      jint fd, jint cols, jint rows) {
     struct winsize ws;
     ws.ws_col = (unsigned short) (cols > 0 ? cols : 80);
@@ -54,7 +89,8 @@ Java_com_voidlinux_core_native_NativeBridge_resizePty(JNIEnv *env, jclass clazz,
     ioctl(fd, TIOCSWINSZ, &ws);
 }
 
+// CORRECTION JNI : Package mis à jour en core_1native
 JNIEXPORT void JNICALL
-Java_com_voidlinux_core_native_NativeBridge_closePty(JNIEnv *env, jclass clazz, jint fd) {
+Java_com_voidlinux_core_1native_NativeBridge_closePty(JNIEnv *env, jclass clazz, jint fd) {
     if (fd >= 0) close(fd);
 }
