@@ -1,15 +1,8 @@
 name: Build Void-Linux APK
 
 on:
-  # Déclenchement manuel depuis l'onglet Actions sur GitHub
+  # Déclenchement UNIQUE et STRICTEMENT manuel depuis l'onglet Actions sur GitHub
   workflow_dispatch:
-
-  # Déclenchements automatiques (Commentez ou supprimez ces lignes si vous voulez UNIQUEMENT le manuel)
-  push:
-    branches: [ main, master, dev ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, master ]
 
 permissions:
   contents: read
