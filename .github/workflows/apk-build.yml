@@ -37,11 +37,15 @@ jobs:
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
-      # Remplacement de l'action Gradle obsolète et de la gestion manuelle du cache
+      # Configuration de Gradle 8.7
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+
+      # Génération du wrapper Gradle manquant pour éviter l'erreur 127
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
 
       - name: Cache CMake build
         uses: actions/cache@v4
@@ -69,7 +73,7 @@ jobs:
             echo "::warning::Pas de script fetch-kali-rootfs.sh — skip"
           fi
 
-      # Compilation regroupée pour éviter le re-démarrage du démon Gradle
+      # Compilation regroupée avec le wrapper désormais disponible
       - name: Build APKs (Debug & Release)
         run: ./gradlew assembleDebug assembleRelease --stacktrace --no-daemon
 
