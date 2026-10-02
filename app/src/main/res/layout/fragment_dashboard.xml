@@ -53,7 +53,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ÉTAT DE L'ENVIRONNEMENT"
+                    android:text="ÉTAT DE L’ENVIRONNEMENT"
                     android:textColor="@color/void_text_dim"
                     android:textSize="11sp"
                     android:textStyle="bold"
