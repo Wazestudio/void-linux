@@ -141,6 +141,31 @@ gradle assembleDebug
 La compilation locale de PRoot requiert Docker, `dpkg-deb` et `patchelf`.
 Sur Windows, exécute ces commandes dans WSL2 avec Docker Desktop.
 
+`assembleDebug` génère un APK signé avec la clé de débogage locale Android,
+adapté aux essais mais pas aux mises à jour d'une version publiée. Pour générer
+un APK release, configure d'abord un keystore personnel et les secrets de
+l'environnement GitHub Actions `release-signing` :
+
+- crée une clé de publication une seule fois avec `keytool -genkeypair -v
+  -keystore void-linux-release.jks -alias void-linux -keyalg RSA -keysize 2048
+  -validity 10000` (saisis les mots de passe aux invites);
+- sous PowerShell, encode le fichier pour le secret Base64 :
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\void-linux-release.jks")) |
+  Set-Content -NoNewline ".\void-linux-release.jks.base64"`, puis copie son
+  contenu dans le secret correspondant et supprime le fichier temporaire;
+- `ANDROID_KEYSTORE_BASE64` : contenu du keystore encodé en Base64;
+- `ANDROID_KEYSTORE_PASSWORD` : mot de passe du keystore;
+- `ANDROID_KEY_ALIAS` : alias de la clé;
+- `ANDROID_KEY_PASSWORD` : mot de passe de la clé.
+
+La clé doit rester stable entre les versions, ne doit jamais être commitée ni
+publiée comme artefact. L'ancienne action de génération/export du keystore a
+été supprimée. Le workflow refuse de compiler/publier une release si ces
+secrets manquent et vérifie la signature avant publication. Protège cet
+environnement dans les paramètres GitHub (branches/tags autorisés et
+approbation requise) pour éviter qu'un workflow lancé depuis une branche non
+fiable puisse utiliser la clé.
+
 ---
 
 🏗️ Architecture

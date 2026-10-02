@@ -11,6 +11,7 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    environment: release-signing
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,8 +78,50 @@ jobs:
       - name: Download and verify official Kali ARM64 rootfs
         run: bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
 
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Le secret GitHub $name est absent; impossible de signer l'APK release."
+              exit 1
+            fi
+          done
+
+          keystore="$RUNNER_TEMP/void-linux-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          keytool -list -keystore "$keystore" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+          {
+            echo "RELEASE_STORE_FILE=$keystore"
+            echo "RELEASE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Build APKs (Debug & Release)
         run: gradle clean assembleDebug assembleRelease --stacktrace --no-daemon
+
+      - name: Verify release APK signature
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::Aucun APK release généré."
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          done
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -114,12 +157,16 @@ jobs:
 
       - name: Prepare release files
         run: |
+          set -euo pipefail
           mkdir -p release
-          find artifacts -name "*.apk" -exec cp {} release/ \;
+          find artifacts/void-linux-release -name "*.apk" -exec cp {} release/ \;
           if [ -z "$(ls -A release)" ]; then
             echo "::error::Aucun APK trouvé pour la release !"
             exit 1
           fi
+          for apk in release/*.apk; do
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
