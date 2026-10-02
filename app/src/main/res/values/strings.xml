@@ -19,7 +19,7 @@
     <string name="linux_uninstall">Désinstaller Kali</string>
     <string name="linux_launch">Lancer Kali</string>
     <string name="linux_installing">Installation en cours…</string>
-    <string name="linux_installed_ok">Kali Linux installé ✅</string>
+    <string name="linux_installed_ok">Kali Linux installé</string>
     <string name="linux_error">Erreur : %1$s</string>
 
     <!-- Terminal -->
@@ -36,7 +36,7 @@
     <string name="tor_title">Réseau Tor</string>
     <string name="tor_installed">Orbot installé</string>
     <string name="tor_missing">Orbot non installé</string>
-    <string name="tor_running">Tor actif ✅</string>
+    <string name="tor_running">Tor actif</string>
     <string name="tor_stopped">Tor arrêté</string>
     <string name="tor_starting">Démarrage de Tor…</string>
     <string name="tor_enable">Activer Tor</string>
