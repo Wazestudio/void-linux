@@ -53,9 +53,11 @@ class SettingsFragment : Fragment() {
         binding.permissionsContainer.removeAllViews()
         list.forEach { perm ->
             val tv = TextView(requireContext()).apply {
-                text = "${if (perm.granted) "OK" else "X"}  ${perm.name}"
+                text = "${if (!perm.runtime) "INFO" else if (perm.granted) "OK" else "X"}  ${perm.name}"
                 setTextColor(
-                    if (perm.granted)
+                    if (!perm.runtime)
+                        ContextCompat.getColor(requireContext(), R.color.void_text_dim)
+                    else if (perm.granted)
                         ContextCompat.getColor(requireContext(), R.color.void_accent)
                     else
                         ContextCompat.getColor(requireContext(), R.color.void_error)
