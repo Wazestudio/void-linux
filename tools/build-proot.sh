@@ -22,10 +22,16 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
 PACKAGES_INDEX="$WORK_DIR/Packages"
+PACKAGE_BASE_URL="$TERMUX_APT_BASE/dists/stable/main/binary-$TERMUX_ARCH"
 echo "Fetching official Termux package index for $TERMUX_ARCH..." >&2
-curl --fail --location --retry 5 --retry-delay 3 --connect-timeout 30 \
-    -o "$PACKAGES_INDEX" \
-    "$TERMUX_APT_BASE/dists/stable/main/binary-$TERMUX_ARCH/Packages"
+if ! curl --fail --location --retry 5 --retry-delay 3 --connect-timeout 30 \
+    -o "$PACKAGES_INDEX" "$PACKAGE_BASE_URL/Packages"; then
+    rm -f "$PACKAGES_INDEX"
+    curl --fail --location --retry 5 --retry-delay 3 --connect-timeout 30 \
+        --compressed -o "$PACKAGES_INDEX" "$PACKAGE_BASE_URL/Packages.gz"
+    gzip -dc "$PACKAGES_INDEX" > "$WORK_DIR/Packages.decoded"
+    mv "$WORK_DIR/Packages.decoded" "$PACKAGES_INDEX"
+fi
 
 find_package_metadata() {
     local package="$1"
@@ -128,15 +134,17 @@ done
 
 case "$ANDROID_ABI" in
     arm64-v8a)
-        file "$OUTPUT_DIR/libproot.so" | grep -Eq 'ELF 64-bit.*ARM aarch64' || {
-            echo "libproot.so is not an ARM64 ELF." >&2; exit 1;
-        }
+        ELF_PATTERN='ELF 64-bit.*ARM aarch64'
         ;;
     armeabi-v7a)
-        file "$OUTPUT_DIR/libproot.so" | grep -Eq 'ELF 32-bit.*ARM' || {
-            echo "libproot.so is not an ARM32 ELF." >&2; exit 1;
-        }
+        ELF_PATTERN='ELF 32-bit.*ARM'
         ;;
 esac
+for elf in "$OUTPUT_DIR"/*.so; do
+    file "$elf" | grep -Eq "$ELF_PATTERN" || {
+        echo "ABI mismatch in $(basename "$elf") for $ANDROID_ABI: $(file "$elf")" >&2
+        exit 1
+    }
+done
 
 echo "Built verified Termux PRoot runtime for $ANDROID_ABI in $OUTPUT_DIR"
