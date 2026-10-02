@@ -100,6 +100,21 @@ jobs:
             echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
+      - name: Validate Gradle project structure
+        run: |
+          set -euo pipefail
+          test -f settings.gradle.kts
+          test -f feature/linux/build.gradle.kts
+          test -f native/CMakeLists.txt
+          if grep -q 'library/proot-engin/proot-engine' settings.gradle.kts; then
+            echo "::error::Ancien module PRoot dupliqué détecté dans settings.gradle.kts"
+            exit 1
+          fi
+          if grep -q '^<\?xml' library/proot-engin/settings.gradle.kts 2>/dev/null; then
+            echo "::error::library/proot-engin/settings.gradle.kts contient du XML au lieu de Gradle"
+            exit 1
+          fi
+
       - name: Build APK (Release)
         run: gradle clean assembleRelease -PtargetAbi="${{ matrix.android-abi }}" --stacktrace --no-daemon
 
