@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:background="@color/void_background">
 
-    <!-- Barre d'état haut -->
+    <!-- Barre d’état haut -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
