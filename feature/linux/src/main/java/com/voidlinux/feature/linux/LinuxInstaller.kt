@@ -91,10 +91,12 @@ class LinuxInstaller(
                     onProgress(overall)
                 }
 
-                if (!File(stagingDir, "bin/bash").exists() ||
-                    !File(stagingDir, "usr/bin/apt-get").exists()
-                ) {
-                    throw IOException("L'archive téléchargée ne contient pas un rootfs Kali valide")
+                normalizeExtractedRootfs(stagingDir)
+                val validation = validateKaliRootfs(stagingDir)
+                if (!validation.first) {
+                    throw IOException(
+                        "L'archive téléchargée ne contient pas un rootfs Kali valide : ${validation.second}"
+                    )
                 }
 
                 if (backupDir.exists()) backupDir.deleteRecursively()
@@ -565,7 +567,77 @@ exec /bin/bash --noprofile --norc -i
 
     fun isInstalled(distro: String): Boolean {
         val dir = host.rootfsFor(distro)
-        return File(dir, "bin/bash").isFile && File(dir, "usr/bin/apt-get").isFile
+        if (distro != Constants.DISTRO_KALI) {
+            return File(dir, "bin/bash").isFile || File(dir, "usr/bin/bash").isFile
+        }
+        return validateKaliRootfs(dir).first
+    }
+
+    /**
+     * Some mirrors/archives can contain a single top-level directory.  The
+     * application expects the filesystem root itself in [stagingDir], so move
+     * that directory's contents up when it is unambiguous.
+     */
+    private fun normalizeExtractedRootfs(stagingDir: File) {
+        if (File(stagingDir, "etc/os-release").isFile ||
+            File(stagingDir, "bin/bash").isFile ||
+            File(stagingDir, "usr/bin/bash").isFile
+        ) return
+
+        val children = stagingDir.listFiles()?.filter { it.name != "." && it.name != ".." }
+            ?: return
+        if (children.size != 1 || !children[0].isDirectory) return
+
+        val nested = children[0]
+        val nestedMarkers = File(nested, "etc/os-release").isFile ||
+            File(nested, "bin/bash").isFile ||
+            File(nested, "usr/bin/bash").isFile
+        if (!nestedMarkers) return
+
+        nested.listFiles()?.forEach { child ->
+            val destination = File(stagingDir, child.name)
+            if (destination.exists() || java.nio.file.Files.exists(destination.toPath(), LinkOption.NOFOLLOW_LINKS)) {
+                throw IOException("Structure rootfs ambiguë : ${child.name}")
+            }
+            if (!child.renameTo(destination)) {
+                throw IOException("Impossible de normaliser le rootfs : ${child.name}")
+            }
+        }
+        if (!nested.delete()) {
+            throw IOException("Impossible de finaliser la normalisation du rootfs")
+        }
+    }
+
+    private fun validateKaliRootfs(rootfs: File): Pair<Boolean, String> {
+        if (!rootfs.isDirectory) return false to "répertoire rootfs absent"
+
+        val shell = sequenceOf(
+            File(rootfs, "bin/bash"),
+            File(rootfs, "usr/bin/bash"),
+            File(rootfs, "bin/sh"),
+            File(rootfs, "usr/bin/sh")
+        ).firstOrNull { it.isFile }
+            ?: return false to "aucun shell Linux trouvé"
+
+        val apt = sequenceOf(
+            File(rootfs, "usr/bin/apt-get"),
+            File(rootfs, "usr/bin/apt")
+        ).firstOrNull { it.isFile }
+            ?: return false to "apt/apt-get absent"
+
+        val osRelease = File(rootfs, "etc/os-release")
+        if (!osRelease.isFile) return false to "etc/os-release absent"
+
+        val release = runCatching { osRelease.readText(Charsets.UTF_8) }.getOrElse {
+            return false to "etc/os-release illisible"
+        }
+        val isKali = release.lineSequence().any { line ->
+            val value = line.substringAfter('=', "").trim().trim('\"', '\'')
+            line.startsWith("ID=") && value.equals("kali", ignoreCase = true)
+        }
+        if (!isKali) return false to "etc/os-release ne décrit pas Kali Linux"
+
+        return true to "shell=${shell.relativeTo(rootfs).path}, apt=${apt.relativeTo(rootfs).path}"
     }
 
     fun uninstall(distro: String): Boolean =
