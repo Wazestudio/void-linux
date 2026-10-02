@@ -69,7 +69,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends patchelf dpkg curl
 
       - name: Build official Termux PRoot (${{ matrix.android-abi }})
-        run: bash tools/build-proot.sh "${{ matrix.android-abi }}"
+        run: |
+          # Configuration globale de curl pour résister aux timeouts du réseau
+          echo "--retry 5" > ~/.curlrc
+          echo "--retry-delay 5" >> ~/.curlrc
+          echo "--speed-limit 10" >> ~/.curlrc
+          echo "--speed-time 300" >> ~/.curlrc
+          
+          # Exécution du script de build
+          bash tools/build-proot.sh "${{ matrix.android-abi }}"
+          
+          # Nettoyage de la configuration locale de curl
+          rm -f ~/.curlrc
 
       - name: Configure Android release signing
         env:
