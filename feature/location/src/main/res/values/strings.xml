@@ -3,5 +3,5 @@
     <string name="location_title">Localisation</string>
     <string name="location_mock_enable">Activer la fausse position</string>
     <string name="location_mock_disable">Fausse position inactive</string>
-    <string name="location_guide">Guide d'activation</string>
+    <string name="location_guide">Guide d’activation</string>
 </resources>
