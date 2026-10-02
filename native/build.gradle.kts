@@ -20,8 +20,7 @@ android {
         }
         externalNativeBuild {
             cmake {
-                cppFlags += "-std=c++17 -fPIC -O2"
-                arguments += "-DANDROID_STL=c++_shared"
+                cFlags += listOf("-Wall", "-Wextra", "-O2", "-fPIC")
             }
         }
     }
