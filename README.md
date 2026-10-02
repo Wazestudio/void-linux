@@ -143,28 +143,34 @@ Sur Windows, exécute ces commandes dans WSL2 avec Docker Desktop.
 
 `assembleDebug` génère un APK signé avec la clé de débogage locale Android,
 adapté aux essais mais pas aux mises à jour d'une version publiée. Pour générer
-un APK release, configure d'abord un keystore personnel et les secrets de
-l'environnement GitHub Actions `release-signing` :
+la clé release une seule fois, configure `KEYSTORE_PASSWORD` et `KEY_PASSWORD`
+dans l'environnement GitHub Actions `release-signing`, puis lance manuellement
+le workflow **Create Android Release Keystore**. Télécharge immédiatement
+l'artefact privé `void-linux-release-keystore` et garde le fichier en lieu sûr.
+Un artefact peut être téléchargé par les personnes ayant accès aux artefacts
+Actions : protège cet environnement avec restrictions de branches/tags et
+approbation. Le workflow refuse de générer une autre clé une fois
+`KEYSTORE_BASE64` configuré.
 
-- crée une clé de publication une seule fois avec `keytool -genkeypair -v
-  -keystore void-linux-release.jks -alias void-linux -keyalg RSA -keysize 2048
-  -validity 10000` (saisis les mots de passe aux invites);
-- sous PowerShell, encode le fichier pour le secret Base64 :
-  `[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\void-linux-release.jks")) |
-  Set-Content -NoNewline ".\void-linux-release.jks.base64"`, puis copie son
-  contenu dans le secret correspondant et supprime le fichier temporaire;
-- `ANDROID_KEYSTORE_BASE64` : contenu du keystore encodé en Base64;
-- `ANDROID_KEYSTORE_PASSWORD` : mot de passe du keystore;
-- `ANDROID_KEY_ALIAS` : alias de la clé;
-- `ANDROID_KEY_PASSWORD` : mot de passe de la clé.
+Après téléchargement de l'artefact, sous PowerShell dans le dossier du fichier
+JKS, encode-le et copie la valeur dans le presse-papiers :
 
-La clé doit rester stable entre les versions, ne doit jamais être commitée ni
-publiée comme artefact. L'ancienne action de génération/export du keystore a
-été supprimée. Le workflow refuse de compiler/publier une release si ces
-secrets manquent et vérifie la signature avant publication. Protège cet
-environnement dans les paramètres GitHub (branches/tags autorisés et
-approbation requise) pour éviter qu'un workflow lancé depuis une branche non
-fiable puisse utiliser la clé.
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\void-linux-release-keystore.jks")) |
+  Set-Clipboard`, puis colle le presse-papiers dans le secret
+  `KEYSTORE_BASE64` et vide-le avec `Set-Clipboard -Value ""`;
+
+Configure ensuite dans le même environnement les secrets utilisés par le
+workflow de build :
+
+- `KEYSTORE_BASE64` : contenu du keystore encodé en Base64;
+- `ANDROID_KEYSTORE_PASSWORD` : même valeur que `KEYSTORE_PASSWORD`;
+- `ANDROID_KEY_ALIAS` : `void-linux`;
+- `ANDROID_KEY_PASSWORD` : même valeur que `KEY_PASSWORD`.
+
+Réutilise toujours cette même clé pour les versions suivantes afin qu'Android
+accepte les mises à jour. Ne la committe pas. Le workflow de build refuse de
+compiler/publier une release si les secrets manquent et vérifie la signature
+avant publication.
 
 ---
 
