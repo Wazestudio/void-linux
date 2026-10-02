@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val targetAbi = providers.gradleProperty("targetAbi").orElse("arm64-v8a").get()
+require(targetAbi in setOf("arm64-v8a", "armeabi-v7a")) {
+    "Unsupported Android ABI: $targetAbi"
+}
+
 android {
     namespace = "com.voidlinux.core.natives"
     compileSdk = 34
@@ -10,7 +15,7 @@ android {
     defaultConfig {
         minSdk = 29
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters += targetAbi
         }
     }
 
