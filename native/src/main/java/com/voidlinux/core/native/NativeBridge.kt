@@ -6,11 +6,6 @@ object NativeBridge {
         System.loadLibrary("voidlinux_jni")
     }
 
-    // --- Proot loader ---
-
-    external fun loadElf(path: String): Int
-
-    external fun checkWxSupported(): Int
 
     // --- PTY ---
 
