@@ -162,7 +162,6 @@ class LinuxSession(
                     if (exitCode != 0) onError("Le processus Linux s'est arrêté (code $exitCode)")
                     onExit(exitCode)
                 }
-                scope.cancel()
             }
         } catch (e: Exception) {
             if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
@@ -213,9 +212,17 @@ class LinuxSession(
     @Synchronized
     fun stop() {
         stopping = true
+        val pid = processId
+        val fd = masterFd
         running = false
-        if (processId > 0) NativeBridge.killProcess(processId)
-        if (masterFd < 0) scope.cancel()
+
+        if (pid > 0) {
+            NativeBridge.killProcess(pid)
+        }
+        if (fd >= 0) {
+            NativeBridge.closePty(fd)
+            masterFd = -1
+        }
     }
 
     @Synchronized
