@@ -99,23 +99,23 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Collections de cybersécurité"
+                    android:text="Outils de diagnostic et sécurité"
                     style="@style/VoidText.Title" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_xs"
-                    android:text="Installation à la demande depuis les dépôts Kali. Réserve ces outils aux systèmes et laboratoires autorisés."
+                    android:text="Installation à la demande depuis les dépôts Kali. Utilise-les uniquement sur tes appareils ou dans des laboratoires autorisés."
                     style="@style/VoidText.Dim" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/networkToolsButton"
+                    android:id="@+id/baselineToolsButton"
                     style="@style/VoidButton.Outlined"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_s"
-                    android:text="Réseau et DNS" />
+                    android:text="Essentiels de diagnostic" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/webToolsButton"
