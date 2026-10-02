@@ -96,6 +96,33 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <com.google.android.material.card.MaterialCardView
+            style="@style/VoidCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_m">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/space_m">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Accès root Android"
+                    style="@style/VoidText.Title" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_xs"
+                    android:text="Void-Linux n'a pas besoin du root Android. PRoot fournit un environnement Linux isolé avec un faux root à l'intérieur du conteneur, sans donner le contrôle total du téléphone. Le root Android modifie les protections du système et dépend du fabricant et du modèle ; aucune procédure universelle n'est fournie ici."
+                    style="@style/VoidText.Dim" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/refresh"
             style="@style/VoidButton"
