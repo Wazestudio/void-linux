@@ -352,12 +352,17 @@ class LinuxInstaller(
             TarArchiveInputStream(xz).use { tar ->
                 var entry = tar.nextEntry
                 while (entry != null) {
-                    val guestPath = entry.name.trimStart('.', '/')
-                    val output = resolveEntry(targetDir, entry)
-                    if (guestPath == "dev" || guestPath.startsWith("dev/")) {
+                    val guestPath = entry.name
+                        .trimStart('.', '/')
+                        .split('/')
+                        .filter { it.isNotEmpty() && it != "." }
+                    val isDeviceTree = guestPath.firstOrNull() == "dev" ||
+                        guestPath.getOrNull(1) == "dev"
+                    if (isDeviceTree) {
                         entry = tar.nextEntry
                         continue
                     }
+                    val output = resolveEntry(targetDir, entry)
                     when {
                         entry.isDirectory -> {
                             output.mkdirs()
@@ -503,7 +508,21 @@ class LinuxInstaller(
         for (child in candidateChildren) {
             val destination = File(rootfs, child.name)
             if (destination.exists() || java.nio.file.Files.isSymbolicLink(destination.toPath())) {
-                throw IOException("Collision pendant la normalisation du rootfs : ${child.name}")
+                // L'extracteur crée /dev comme répertoire de remplacement pour
+                // éviter les nœuds de périphérique Android. Si l'archive contient
+                // un wrapper (ex. rootfs/dev), ce répertoire vide ne doit pas être
+                // considéré comme une collision réelle.
+                val canReplaceEmptyDirectory = child.name == "dev" &&
+                    destination.isDirectory &&
+                    destination.list()?.isEmpty() == true &&
+                    !java.nio.file.Files.isSymbolicLink(destination.toPath())
+                if (canReplaceEmptyDirectory) {
+                    if (!destination.delete()) {
+                        throw IOException("Impossible de remplacer le répertoire /dev temporaire")
+                    }
+                } else {
+                    throw IOException("Collision pendant la normalisation du rootfs : ${child.name}")
+                }
             }
             if (!child.renameTo(destination)) {
                 throw IOException("Impossible de déplacer ${child.name} vers la racine du rootfs")
