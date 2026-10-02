@@ -42,6 +42,7 @@ sudo tar -xJf "$archive" -C "$rootfs"
 sudo mkdir -p "$rootfs/usr/bin"
 sudo cp "$QEMU_PATH" "$rootfs/usr/bin/$QEMU_NAME"
 sudo rm -f "$rootfs/etc/resolv.conf"
+sudo mkdir -p "$rootfs/etc"
 sudo cp /etc/resolv.conf "$rootfs/etc/resolv.conf"
 
 for directory in dev proc sys; do
