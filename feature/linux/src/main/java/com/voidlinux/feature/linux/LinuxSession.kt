@@ -6,7 +6,7 @@ import com.voidlinux.core.native.NativeBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -20,6 +20,7 @@ class LinuxSession(
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var sessionJob: Job? = null
     private val host = LinuxHost(context)
     private var masterFd = -1
     private var processId = -1
@@ -146,7 +147,7 @@ class LinuxSession(
             running = true
             onOutput("Kali Linux démarré (PRoot, sans privilèges root Android).\r\n")
 
-            scope.launch {
+            sessionJob = scope.launch {
                 while (true) {
                     val bytes = NativeBridge.readFromPty(master, 4096) ?: break
                     onOutput(String(bytes, StandardCharsets.UTF_8))
@@ -162,6 +163,7 @@ class LinuxSession(
                     if (exitCode != 0) onError("Le processus Linux s'est arrêté (code $exitCode)")
                     onExit(exitCode)
                 }
+                sessionJob = null
             }
         } catch (e: Exception) {
             if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
@@ -212,17 +214,10 @@ class LinuxSession(
     @Synchronized
     fun stop() {
         stopping = true
-        val pid = processId
-        val fd = masterFd
         running = false
-
-        if (pid > 0) {
-            NativeBridge.killProcess(pid)
-        }
-        if (fd >= 0) {
-            NativeBridge.closePty(fd)
-            masterFd = -1
-        }
+        if (processId > 0) NativeBridge.killProcess(processId)
+        sessionJob?.cancel()
+        sessionJob = null
     }
 
     @Synchronized
