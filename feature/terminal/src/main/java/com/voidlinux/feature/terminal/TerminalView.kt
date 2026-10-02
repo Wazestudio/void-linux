@@ -68,15 +68,35 @@ class TerminalView @JvmOverloads constructor(
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
         outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
-        return object : BaseInputConnection(this, false) {
+        return object : BaseInputConnection(this, true) {
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                if (text != null) onInput?.invoke(text.toString())
+                if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
+                return true
+            }
+
+            override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                // Les terminaux n'utilisent pas de texte composé : on envoie
+                // directement la composition au PTY pour une saisie fluide.
+                if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
                 return true
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-                repeat(maxOf(beforeLength, afterLength).coerceAtMost(16)) {
+                repeat(maxOf(beforeLength, afterLength).coerceAtMost(32)) {
                     onInput?.invoke("\u007F")
+                }
+                return true
+            }
+
+            override fun sendKeyEvent(event: KeyEvent): Boolean {
+                if (event.action != KeyEvent.ACTION_DOWN) return true
+                val ansi = KeyboardHandler.keyCodeToAnsi(event.keyCode, event)
+                if (ansi != null) onInput?.invoke(ansi)
+                else {
+                    when (event.keyCode) {
+                        KeyEvent.KEYCODE_ENTER -> onInput?.invoke("\r")
+                        KeyEvent.KEYCODE_DEL -> onInput?.invoke("\u007F")
+                    }
                 }
                 return true
             }
