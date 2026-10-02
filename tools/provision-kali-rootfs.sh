@@ -4,8 +4,8 @@ set -euo pipefail
 ARCH="${1:?Usage: provision-kali-rootfs.sh arm64|armhf [assets-dir]}"
 ASSETS_DIR="${2:-app/src/main/assets}"
 case "$ARCH" in
-  arm64) QEMU_NAME="qemu-aarch64" ;;
-  armhf) QEMU_NAME="qemu-arm" ;;
+  arm64) QEMU_NAMES=(qemu-aarch64-static qemu-aarch64) ;;
+  armhf) QEMU_NAMES=(qemu-arm-static qemu-arm) ;;
   *) echo "Architecture Kali inconnue: $ARCH" >&2; exit 1 ;;
 esac
 
@@ -14,10 +14,17 @@ if [[ ! -s "$archive" ]]; then
   echo "Archive Kali absente ou vide: $archive" >&2
   exit 1
 fi
-if ! command -v "$QEMU_NAME" >/dev/null 2>&1; then
-  echo "Émulateur $QEMU_NAME absent; installe qemu-user-static et binfmt-support." >&2
+QEMU_PATH=""
+for qemu_name in "${QEMU_NAMES[@]}"; do
+  if QEMU_PATH="$(command -v "$qemu_name")"; then
+    break
+  fi
+done
+if [[ -z "$QEMU_PATH" ]]; then
+  echo "Émulateur absent (essayés : ${QEMU_NAMES[*]}); installe qemu-user-static et binfmt-support." >&2
   exit 1
 fi
+QEMU_NAME="$(basename "$QEMU_PATH")"
 
 rootfs="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/kali-rootfs.XXXXXX")"
 mounted=()
@@ -30,7 +37,7 @@ cleanup() {
 trap cleanup EXIT
 
 sudo tar -xJf "$archive" -C "$rootfs"
-sudo cp "$(command -v "$QEMU_NAME")" "$rootfs/usr/bin/$QEMU_NAME"
+sudo cp "$QEMU_PATH" "$rootfs/usr/bin/$QEMU_NAME"
 sudo rm -f "$rootfs/etc/resolv.conf"
 sudo cp /etc/resolv.conf "$rootfs/etc/resolv.conf"
 
