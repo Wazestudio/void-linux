@@ -85,11 +85,12 @@ class DashboardFragment : Fragment() {
             } else {
                 View.GONE
             }
-        binding.linuxStatus.setTextColor(
-            requireContext().getColor(
-                if (state.ready) R.color.status_ok else R.color.void_warning
-            )
-        )
+        val statusColor = when {
+            state.ready -> R.color.status_ok
+            state.errorMessage != null -> R.color.status_error
+            else -> R.color.void_warning
+        }
+        binding.linuxStatus.setTextColor(requireContext().getColor(statusColor))
     }
 
     override fun onDestroyView() {

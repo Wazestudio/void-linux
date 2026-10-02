@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@+id/dashboardFragment"
-        android:icon="@android:drawable/ic_menu_view"
+        android:icon="@drawable/ic_nav_home"
         android:title="Accueil" />
     <item android:id="@+id/terminalFragment"
-        android:icon="@android:drawable/ic_menu_edit"
-        android:title="Console" />
+        android:icon="@drawable/ic_nav_terminal"
+        android:title="Terminal" />
     <item android:id="@+id/linuxFragment"
-        android:icon="@android:drawable/ic_menu_manage"
-        android:title="Outils" />
+        android:icon="@drawable/ic_nav_linux"
+        android:title="Linux" />
     <item android:id="@+id/securityFragment"
-        android:icon="@android:drawable/ic_lock_lock"
-        android:title="Protection" />
+        android:icon="@drawable/ic_nav_security"
+        android:title="Sécurité" />
     <item android:id="@+id/settingsFragment"
-        android:icon="@android:drawable/ic_menu_preferences"
-        android:title="Réglages" />
+        android:icon="@drawable/ic_nav_settings"
+        android:title="Paramètres" />
 </menu>

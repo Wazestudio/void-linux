@@ -17,7 +17,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="void@linux:~#"
+            android:text="KALI  /  PROOT"
             android:textColor="@color/void_accent"
             android:textSize="12sp"
             android:fontFamily="monospace" />
@@ -48,7 +48,7 @@
             android:layout_height="32dp"
             android:layout_marginStart="@dimen/space_xs"
             android:paddingHorizontal="12dp"
-            android:text="Stop"
+            android:text="Arrêter"
             android:textSize="11sp" />
     </LinearLayout>
 

@@ -41,7 +41,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Distribution"
+                    android:text="Environnement disponible"
                     style="@style/VoidText.Dim" />
 
                 <Spinner
@@ -50,6 +50,13 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_s"
                     android:backgroundTint="@color/void_accent" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_s"
+                    android:text="Kali rootfs exécuté avec PRoot. Le noyau et les permissions restent ceux d'Android."
+                    style="@style/VoidText.Dim" />
 
                 <TextView
                     android:id="@+id/statusText"

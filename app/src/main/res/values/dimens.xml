@@ -6,9 +6,9 @@
     <dimen name="space_l">24dp</dimen>
     <dimen name="space_xl">32dp</dimen>
 
-    <dimen name="corner_s">8dp</dimen>
-    <dimen name="corner_m">12dp</dimen>
-    <dimen name="corner_l">16dp</dimen>
+    <dimen name="corner_s">2dp</dimen>
+    <dimen name="corner_m">4dp</dimen>
+    <dimen name="corner_l">6dp</dimen>
 
     <dimen name="text_xs">11sp</dimen>
     <dimen name="text_s">13sp</dimen>

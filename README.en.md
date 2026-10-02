@@ -12,7 +12,7 @@ Terminal Linux On Android
 
 <h1 align="center">Void-Linux</h1>
 <p align="center">
-  <strong>All-in-one hacker environment for Android</strong>
+  <strong>Rootless Kali Linux environment for Android</strong>
 </p>
 
 <p align="center">
@@ -105,7 +105,7 @@ Only use these tools on systems or in labs where you are explicitly authorized.
 
 ### 📍 Location
 
-- Fake GPS position with global presets
+- Experimental Android mock-location provider for developer testing (not anonymization)
 - Custom position
 - System hardening guide
 

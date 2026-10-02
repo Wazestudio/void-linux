@@ -1,49 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fond principal — noir profond -->
-    <color name="void_background">#FF0A0F14</color>
+    <color name="void_background">#FF101216</color>
 
-    <!-- Surface — légèrement plus clair -->
-    <color name="void_surface">#FF111922</color>
-    <color name="void_surface_variant">#FF1A2631</color>
+    <color name="void_surface">#FF181B20</color>
+    <color name="void_surface_variant">#FF22262D</color>
 
-    <!-- Accent principal — vert néon -->
-    <color name="void_accent">#FF35E0B5</color>
-    <color name="void_accent_dim">#FF197D69</color>
+    <color name="void_accent">#FF367BF0</color>
+    <color name="void_accent_dim">#FF244A7F</color>
 
-    <!-- Accent secondaire — violet -->
-    <color name="void_secondary">#FF65A9FF</color>
+    <color name="void_secondary">#FF8BB4F0</color>
 
-    <!-- Alerte -->
-    <color name="void_warning">#FFFFC66D</color>
-    <color name="void_error">#FFFF6B75</color>
+    <color name="void_warning">#FFF0B84B</color>
+    <color name="void_error">#FFF16B73</color>
 
-    <!-- Texte -->
-    <color name="void_text">#FFEAF1F7</color>
-    <color name="void_text_dim">#FF9AAAB8</color>
-    <color name="void_text_disabled">#FF596875</color>
+    <color name="void_text">#FFE7E9ED</color>
+    <color name="void_text_dim">#FFA4AAB3</color>
+    <color name="void_text_disabled">#FF707780</color>
 
-    <!-- Terminal -->
-    <color name="term_background">#FF000000</color>
-    <color name="term_foreground">#FF67E8BE</color>
-    <color name="term_cursor">#FF67E8BE</color>
-    <color name="term_selection">#FF143F36</color>
+    <color name="term_background">#FF080A0D</color>
+    <color name="term_foreground">#FFA6E22E</color>
+    <color name="term_cursor">#FFA6E22E</color>
+    <color name="term_selection">#FF17355F</color>
 
     <!-- Terminal ANSI -->
     <color name="term_black">#FF000000</color>
     <color name="term_red">#FFFF5555</color>
-    <color name="term_green">#FF50FA7B</color>
+    <color name="term_green">#FFA6E22E</color>
     <color name="term_yellow">#FFF1FA8C</color>
-    <color name="term_blue">#FF6272A4</color>
+    <color name="term_blue">#FF729FCF</color>
     <color name="term_magenta">#FFBD93F9</color>
     <color name="term_cyan">#FF8BE9FD</color>
     <color name="term_white">#FFF8F8F2</color>
 
-    <!-- Divider -->
-    <color name="void_divider">#FF293743</color>
+    <color name="void_divider">#FF30353D</color>
 
-    <!-- Statuts -->
-    <color name="status_ok">#FF35E0B5</color>
-    <color name="status_warn">#FFFFC66D</color>
-    <color name="status_error">#FFFF6B75</color>
+    <color name="status_ok">#FF76B987</color>
+    <color name="status_warn">#FFF0B84B</color>
+    <color name="status_error">#FFF16B73</color>
 </resources>

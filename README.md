@@ -12,7 +12,7 @@ Terminal Linux On Android
 </p>
 
 <p align="center">
-  <strong>Environnement hacker tout-en-un sur Android</strong>
+  <strong>Environnement Kali Linux rootless pour Android</strong>
 </p>
 
 <p align="center">
@@ -29,10 +29,10 @@ Terminal Linux On Android
 
 ### 🌌 Qu'est-ce que Void-Linux ?
 
-**Void-Linux** est une application Android organisée en plusieurs modules,
-notamment pour Kali/PRoot, le terminal et Tor. Leur niveau de finition et de
-validation varie; les fonctions listées dans le dépôt ne sont pas toutes
-garanties comme opérationnelles. Consulte le
+**Void-Linux** fournit un rootfs Kali et un terminal Linux sur Android.
+L'environnement utilise PRoot : ce n'est pas une machine virtuelle et il
+partage le noyau Android. Les fonctions annexes restent expérimentales et leur
+niveau de validation varie. Consulte le
 [guide complet en français](docs/FONCTIONNEMENT.md) avant de les utiliser.
 
 > Pour le fonctionnement détaillé, les téléchargements, les prérequis, les
@@ -42,7 +42,7 @@ garanties comme opérationnelles. Consulte le
 - 🐉 Rootfs Kali minimal ARM64/ARMHF avec PRoot (sans root Android)
 - 💻 Terminal intégré prévu pour une session Linux lorsque le moteur natif est présent
 - 🧅 Navigateur utilisant le proxy SOCKS d'Orbot; Orbot doit être installé séparément
-- 🧪 Écrans et composants expérimentaux pour Windows, sécurité et localisation
+- 🧪 Fonctions annexes expérimentales; la localisation fictive est un outil de test développeur
 
 Voir le guide pour les prérequis, les limites, les dépendances et les
 vérifications encore nécessaires.
@@ -108,10 +108,10 @@ N'utilise les outils que sur tes systèmes ou dans des laboratoires pour lesquel
 - Surveillance réseau par UID
 - Notifications push immédiates
 
-### 📍 Localisation
+### 📍 Localisation de test
 
-- Fausse position GPS avec presets mondiaux
-- Position personnalisée
+- Fournisseur de position fictive Android nécessitant les options développeur
+- Fonction de test, sans effet d'anonymisation ou de protection
 - Guide de durcissement système
 
 ---
@@ -313,7 +313,7 @@ MIT License — voir LICENSE pour plus de détails.
 ## 🇬🇧 English
 
 <p align="center">
-  <strong>All-in-one hacker environment on Android</strong>
+  <strong>Rootless Kali Linux environment for Android</strong>
 </p>
 
 <p align="center">

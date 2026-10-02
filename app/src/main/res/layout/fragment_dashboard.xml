@@ -15,26 +15,26 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="VOID  /  SECURITY LAB"
+            android:text="VOID-LINUX  /  KALI ROOTLESS"
             android:textColor="@color/void_accent"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:letterSpacing="0.12" />
+            android:letterSpacing="0.06" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="Centre de sécurité"
+            android:layout_marginTop="8dp"
+            android:text="Kali Linux"
             android:textColor="@color/void_text"
-            android:textSize="30sp"
+            android:textSize="28sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Un environnement mobile pour apprendre, analyser et tester avec autorisation."
+            android:layout_marginTop="6dp"
+            android:text="Terminal Linux rootless pour Android"
             android:textColor="@color/void_text_dim"
             android:textSize="14sp" />
 
@@ -42,8 +42,7 @@
             style="@style/VoidCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            app:strokeColor="@color/void_accent_dim">
+            android:layout_marginTop="20dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -54,7 +53,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="ÉTAT DU LABORATOIRE"
+                    android:text="ÉTAT DE L'ENVIRONNEMENT"
                     android:textColor="@color/void_text_dim"
                     android:textSize="11sp"
                     android:textStyle="bold"
@@ -101,7 +100,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="PRoot isolé · aucun accès root Android"
+                    android:text="PRoot · espace utilisateur Linux · noyau Android partagé"
                     android:textColor="@color/void_text_dim"
                     android:textSize="13sp" />
             </LinearLayout>
@@ -111,7 +110,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="OUTILS ET ENVIRONNEMENT"
+            android:text="ACCÈS RAPIDE"
             android:textColor="@color/void_text_dim"
             android:textSize="11sp"
             android:textStyle="bold"
@@ -125,9 +124,9 @@
             android:layout_marginTop="10dp"
             android:gravity="start|center_vertical"
             android:minHeight="58dp"
-            android:text="Ouvrir le terminal Kali"
+            android:text="Ouvrir le terminal"
             android:textSize="15sp"
-            app:icon="@android:drawable/ic_menu_edit"
+            app:icon="@drawable/ic_nav_terminal"
             app:iconGravity="textStart"
             app:iconPadding="14dp" />
 
@@ -138,9 +137,9 @@
             android:layout_height="wrap_content"
             android:gravity="start|center_vertical"
             android:minHeight="54dp"
-            android:text="Outils et collections APT"
+            android:text="Système et paquets"
             android:textSize="14sp"
-            app:icon="@android:drawable/ic_menu_manage"
+            app:icon="@drawable/ic_nav_linux"
             app:iconGravity="textStart"
             app:iconPadding="14dp" />
 
@@ -156,9 +155,9 @@
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_weight="1"
-                android:text="Protection"
+                android:text="Sécurité"
                 android:textSize="12sp"
-                app:icon="@android:drawable/ic_lock_lock"
+                app:icon="@drawable/ic_nav_security"
                 app:iconGravity="textStart"
                 app:iconPadding="6dp" />
 
@@ -169,9 +168,9 @@
                 android:layout_height="52dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Réseau privé"
+                android:text="Tor / Orbot"
                 android:textSize="12sp"
-                app:icon="@android:drawable/ic_menu_compass"
+                app:icon="@drawable/ic_nav_network"
                 app:iconGravity="textStart"
                 app:iconPadding="6dp" />
         </LinearLayout>
@@ -181,7 +180,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
             android:gravity="center"
-            android:text="Utilise les outils uniquement sur des systèmes autorisés."
+            android:text="Les outils réseau nécessitent une autorisation explicite."
             android:textColor="@color/void_text_dim"
             android:textSize="12sp" />
     </LinearLayout>
