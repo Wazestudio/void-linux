@@ -6,6 +6,11 @@ Terminal Linux On Android
 </p>
 
 <h1 align="center">Void-Linux</h1>
+
+<p align="center">
+  <a href="#-français">🇫🇷 Français</a> | <a href="#-english">🇬🇧 English</a>
+</p>
+
 <p align="center">
   <strong>Environnement hacker tout-en-un sur Android</strong>
 </p>
@@ -20,7 +25,9 @@ Terminal Linux On Android
 
 ---
 
-## 🌌 Qu'est-ce que Void-Linux ?
+## 🇫🇷 Français
+
+### 🌌 Qu'est-ce que Void-Linux ?
 
 **Void-Linux** est une application Android organisée en plusieurs modules,
 notamment pour Kali/PRoot, le terminal et Tor. Leur niveau de finition et de
@@ -301,5 +308,299 @@ MIT License — voir LICENSE pour plus de détails.
   Fait Wazestudio pour la communauté cybersécurité
 </p>
 
+---
+
+## 🇬🇧 English
+
+<p align="center">
+  <strong>All-in-one hacker environment on Android</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-10%2B-brightgreen?style=flat-square" />
+  <img src="https://img.shields.io/badge/Kali-Linux-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/Kotlin-1.9-purple?style=flat-square" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" />
+  <img src="https://img.shields.io/github/actions/workflow/status/Wazestudio/void-linux/apk-build.yml?style=flat-square" />
+</p>
+
+### 🌌 What is Void-Linux?
+
+**Void-Linux** is an Android application organized into multiple modules,
+including Kali/PRoot, terminal, and Tor. Their level of completion and
+validation varies; the functions listed in the repository are not all
+guaranteed to be operational. Check the
+[complete English guide](docs/FONCTIONNEMENT.md) before using them.
+
+> For detailed functionality, downloads, prerequisites, limitations, and
+> feature validation status, see the
+> [complete guide](docs/FONCTIONNEMENT.md).
+
+- 🐉 Minimal Kali rootfs ARM64/ARMHF with PRoot (no Android root required)
+- 💻 Integrated terminal designed for a Linux session when the native engine is present
+- 🧅 Browser using Orbot's SOCKS proxy; Orbot must be installed separately
+- 🧪 Experimental screens and components for Windows, security, and localization
+
+See the guide for prerequisites, limitations, dependencies, and
+additional checks needed.
+
+---
+
+## ✨ Features
+
+### 🐉 Linux Environment
+
+- Minimal Kali ARM64 or ARMHF rootfs integrated into the APK based on build architecture
+- Automatic rootfs initialization on first app launch
+- No Android root required; rootfs isolation relies on PRoot
+- Interactive shell session in the Terminal tab
+- Install Kali packages with `apt`
+- Local rootfs initialization; Internet required for APT and optional collections
+
+The Kali rootfs and Android PRoot engine are two separate components. CI produces
+two distinct APKs: ARM64 (`arm64-v8a`) and 32-bit ARM (`armeabi-v7a`), each with
+its corresponding rootfs and PRoot engine. Choose the APK that matches your device.
+The compressed rootfs archive is included in the APK; Android extracts it to
+private storage on first app launch, without downloading or manual steps. Required
+free space after extraction remains several hundred MB depending on rootfs version.
+Each image also includes `curl`, `nmap`, `dig`, and `whois`. Other collections are
+installable on demand from the Linux tab.
+
+Example, in the Kali terminal:
+
+```sh
+apt update
+apt install john
+```
+
+Only use tools on your systems or in labs where you have authorization.
+
+### 💻 Integrated Terminal
+
+- Complete VT100/ANSI emulator
+- 256 and true color support
+- Extended keyboard (ESC, TAB, CTRL, arrows)
+- Native PTY for a real shell
+
+### 🪟 Windows (Wine + Box64)
+
+- Run Windows `.exe` programs
+- Box64 to translate x86_64 → ARM64
+- Isolated Wine prefix
+- Real-time console output
+
+### 🧅 Tor and Dark Web
+
+- Orbot detection and real Tor proxy verification via Tor control service
+- Browser HTTP(S) requests routed through local SOCKS proxy
+- `.onion` navigation and integrated search engine
+- Block network requests if Tor proxy is unavailable
+- Private session: third-party cookies refused and cookies cleared on close
+
+### 🛡️ Security
+
+- Download monitoring (`FileObserver`)
+- APK analysis (SHA-256 signature + permissions)
+- Battery drain detection
+- Network monitoring by UID
+- Immediate push notifications
+
+### 📍 Localization
+
+- Fake GPS location with worldwide presets
+- Custom position
+- System hardening guide
+
+---
+
+## 📸 Preview
+
+<p align="center">
+  <img src="void-linux-git.png" alt="Void-Linux Preview" width="80%" />
+</p>
+
+---
+
+## 📥 Installation
+
+### Direct Download
+
+Get the latest version from
+[**Releases**](https://github.com/Wazestudio/void-linux/releases).
+
+### Build from Source
+
+```bash
+# Clone
+git clone https://github.com/Wazestudio/void-linux.git
+cd void-linux
+
+# Build PRoot ARM64 from official Termux sources
+bash tools/build-proot.sh
+
+# Generate mipmap icons
+bash tools/generate-mipmaps.sh
+
+# Build
+gradle assembleDebug
+
+# Generated APK in:
+# app/build/outputs/apk/debug/app-debug.apk
+```
+
+Local PRoot compilation requires Docker, `dpkg-deb`, and `patchelf`.
+On Windows, run these commands in WSL2 with Docker Desktop.
+
+`assembleDebug` generates an APK signed with the local Android debug key,
+suitable for testing but not for updates to a published version. To generate
+the release key once, configure `KEYSTORE_PASSWORD` and `KEY_PASSWORD`
+in the GitHub Actions `release-signing` environment, then manually launch
+the **Create Android Release Keystore** workflow. Immediately download
+the private `void-linux-release-keystore` artifact and keep the file secure.
+An artifact can be downloaded by people with access to Actions artifacts:
+protect this environment with branch/tag restrictions and approval. The workflow
+refuses to generate another key once `KEYSTORE_BASE64` is configured.
+
+After downloading the artifact, in PowerShell in the JKS file folder,
+encode it and copy the value to clipboard:
+
+  `[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\void-linux-release-keystore.jks")) |
+  Set-Clipboard`, then paste the clipboard into the
+  `KEYSTORE_BASE64` secret and clear it with `Set-Clipboard -Value ""`;
+
+Then configure in the same environment the secrets used by the
+build workflow:
+
+- `KEYSTORE_BASE64`: Base64-encoded keystore content;
+- `ANDROID_KEYSTORE_PASSWORD`: same value as `KEYSTORE_PASSWORD`;
+- `ANDROID_KEY_ALIAS`: `void-linux`;
+- `ANDROID_KEY_PASSWORD`: same value as `KEY_PASSWORD`.
+
+Always reuse this same key for subsequent releases so Android accepts updates.
+Do not commit it. The build workflow refuses to compile/publish a release if secrets
+are missing and verifies the signature before publication.
+
+---
+
+🏗️ Architecture
+
+```
+Void-Linux/
+├── app/                    → Main Application
+├── core/
+│   ├── common/             → Shared utilities
+│   ├── designsystem/       → Material 3 theme
+│   ├── data/               → Preferences + SQLite
+│   └── native/             → C code (proot loader, PTY)
+├── feature/
+│   ├── terminal/           → Terminal emulator
+│   ├── linux/              → Kali installation
+│   ├── windows/            → Wine + Box64
+│   ├── tor/                → Tor network
+│   ├── security/           → Monitoring
+│   ├── location/           → Fake location
+│   └── settings/           → Hardening
+├── library/
+│   ├── proot-engine/       → Proot engine
+│   ├── termux-bootstrap/   → Termux bootstrap
+│   ├── wine/               → Wine binaries
+│   └── natives/            → Proot binaries
+└── tools/                  → Build scripts
+```
+
+---
+
+🔧 Requirements
+
+Outil Version
+Android SDK API 34
+NDK r25c+
+JDK 17
+Gradle 8.7+
+Kotlin 1.9.24
+
+---
+
+🚀 CI/CD
+
+The project uses GitHub Actions for:
+
+· ✅ Automatic build on every push
+· ✅ Mipmap icon generation
+· ✅ Kali rootfs download
+· ✅ Native binary compilation
+· ✅ Automatic publication on v* tags
+
+Creating a release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The APK will be automatically attached to the GitHub release. CI includes PRoot and
+ARM64 libraries, then the terminal starts an interactive Kali session with PTY.
+
+---
+
+⚠️ Legal Warning
+
+Void-Linux is a tool intended for:
+
+· ✅ Authorized penetration testing
+· ✅ Security research
+· ✅ Personal privacy protection
+· ✅ Cybersecurity learning
+
+It is strictly forbidden to use this tool for:
+
+· ❌ Attacking systems without authorization
+· ❌ Accessing protected data
+· ❌ Circumventing legal security measures
+
+The authors are not responsible for how it is used.
+Use it ethically and legally.
+
+---
+
+🤝 Contributing
+
+Contributions are welcome!
+
+1. Fork the project
+2. Create a branch (git checkout -b feature/my-feature)
+3. Commit (git commit -m 'Add my feature')
+4. Push (git push origin feature/my-feature)
+5. Open a Pull Request
+
+---
+
+📄 License
+
+MIT License — see LICENSE for details.
+
+---
+
+🙏 Acknowledgments
+
+· Kali Linux — Penetration testing distribution
+· Termux — Android Linux environment
+· Termux PRoot — Root emulation without root (GPL-2.0)
+· libtalloc — Memory management library required by PRoot (GPL-3.0)
+· libandroid-shmem — Android shared memory compatibility (BSD-3-Clause)
+· Wine — Windows compatibility layer
+· Box64 — x86_64 emulator
+· Tor Project — Network anonymity
+· NetCipher — Android Tor integration
+
+---
+
+<p align="center">
+  <strong>Void-Linux</strong> — Where the void becomes power.
+</p>
+
+<p align="center">
+  Made by Wazestudio for the cybersecurity community
+</p>
 
 ---
