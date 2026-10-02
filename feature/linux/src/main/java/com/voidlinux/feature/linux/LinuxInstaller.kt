@@ -21,6 +21,8 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 import kotlin.math.max
@@ -79,7 +81,10 @@ class LinuxInstaller(
                 }
 
                 stagingDir.deleteRecursively()
-                stagingDir.mkdirs()
+                if (!stagingDir.mkdirs() && !stagingDir.isDirectory) {
+                    throw IOException("Impossible de créer le répertoire privé d'installation Kali")
+                }
+                Os.chmod(stagingDir.absolutePath, 0x1c0)
                 extractRootfs(archive, stagingDir) { progress ->
                     val overall = 50 + progress / 2
                     notifier.update(distro.displayName, overall)
@@ -441,9 +446,13 @@ class LinuxInstaller(
                 }
                 parent = parent.parentFile
             }
-            if (link.exists()) {
-                if (!link.isDirectory || link.list()?.isNotEmpty() == true || !link.delete()) {
+            val linkExists = Files.exists(link.toPath(), LinkOption.NOFOLLOW_LINKS)
+            if (linkExists) {
+                if (link.isDirectory && link.list()?.isNotEmpty() == true) {
                     throw IOException("Collision de chemin de lien symbolique dans le rootfs")
+                }
+                if (!link.delete()) {
+                    throw IOException("Impossible de remplacer l'entrée du rootfs : ${link.absolutePath}")
                 }
             }
             link.parentFile?.mkdirs()
