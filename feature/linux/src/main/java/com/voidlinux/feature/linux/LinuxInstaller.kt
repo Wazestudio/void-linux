@@ -2,6 +2,7 @@ package com.voidlinux.feature.linux
 
 import android.app.NotificationManager
 import android.content.Context
+import android.system.ErrnoException
 import android.system.Os
 import androidx.core.app.NotificationCompat
 import com.voidlinux.core.common.Constants
@@ -410,7 +411,20 @@ class LinuxInstaller(
                 val linkTarget = resolveArchivePath(targetDir, target)
                 if (!linkTarget.isFile) continue
                 link.parentFile?.mkdirs()
-                Os.link(linkTarget.absolutePath, link.absolutePath)
+                try {
+                    Os.link(linkTarget.absolutePath, link.absolutePath)
+                } catch (e: ErrnoException) {
+                    // Android peut refuser les hard-links selon le filesystem/SELinux.
+                    // Un fichier indépendant conserve ici le contenu du rootfs sans
+                    // empêcher l'installation complète de la distribution.
+                    if (e.errno != android.system.OsConstants.EACCES &&
+                        e.errno != android.system.OsConstants.EPERM
+                    ) throw e
+                    linkTarget.inputStream().buffered().use { input ->
+                        FileOutputStream(link).use { output -> input.copyTo(output, 64 * 1024) }
+                    }
+                    applyMode(link, Os.stat(linkTarget.absolutePath).st_mode and 0x1ff)
+                }
                 iterator.remove()
                 linkedAny = true
             }
@@ -433,7 +447,15 @@ class LinuxInstaller(
                 }
             }
             link.parentFile?.mkdirs()
-            Os.symlink(target, link.absolutePath)
+            try {
+                Os.symlink(target, link.absolutePath)
+            } catch (e: ErrnoException) {
+                throw IOException(
+                    "Android refuse le lien symbolique dans le stockage privé du rootfs " +
+                        "(errno=${e.errno}). Vérifie que le rootfs est sous filesDir.",
+                    e
+                )
+            }
             createdLinks += link.absolutePath
         }
     }
