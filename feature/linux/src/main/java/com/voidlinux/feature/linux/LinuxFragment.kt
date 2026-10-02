@@ -49,8 +49,8 @@ class LinuxFragment : Fragment() {
         }
 
         binding.uninstallButton.setOnClickListener { viewModel.uninstall() }
-        binding.networkToolsButton.setOnClickListener {
-            viewModel.installToolCollection("network")
+        binding.baselineToolsButton.setOnClickListener {
+            viewModel.installToolCollection(SecurityToolCatalog.DEFAULT_COLLECTION_ID)
         }
         binding.webToolsButton.setOnClickListener {
             viewModel.installToolCollection("web")
@@ -76,7 +76,7 @@ class LinuxFragment : Fragment() {
                     if (state.nativeReady) View.GONE else View.VISIBLE
                 val canInstallTools = state.installed && state.nativeReady &&
                     !state.installing && !state.installingTools
-                binding.networkToolsButton.isEnabled = canInstallTools
+                binding.baselineToolsButton.isEnabled = canInstallTools
                 binding.webToolsButton.isEnabled = canInstallTools
                 binding.analysisToolsButton.isEnabled = canInstallTools
                 binding.toolsProgress.visibility =

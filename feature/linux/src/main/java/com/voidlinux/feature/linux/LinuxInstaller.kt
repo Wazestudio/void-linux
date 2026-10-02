@@ -211,9 +211,14 @@ class LinuxInstaller(
 
             val append = responseCode == HttpURLConnection.HTTP_PARTIAL && downloaded > 0L
             if (responseCode == HttpURLConnection.HTTP_PARTIAL && !append) {
+                target.delete()
                 throw IOException("Réponse de reprise inattendue du serveur")
             }
-            if (downloaded > 0L && !append) downloaded = 0L
+            if (downloaded > 0L && !append) {
+                // Le serveur a ignoré la demande Range : on repart proprement.
+                target.delete()
+                downloaded = 0L
+            }
             val contentRange = if (append) {
                 CONTENT_RANGE_REGEX.matchEntire(
                     connection.getHeaderField("Content-Range").orEmpty()
