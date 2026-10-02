@@ -38,6 +38,7 @@ class LinuxInstaller(
         installationMutex.withLock {
             val targetDir = host.rootfsFor(distro.id)
             if (isInstalled(distro.id)) {
+                prepareRuntimeFilesystem(targetDir)
                 configureKaliLogin(targetDir)
                 return@withLock VoidResult.Success(targetDir)
             }
@@ -98,6 +99,7 @@ class LinuxInstaller(
                     if (backupDir.exists()) backupDir.renameTo(targetDir)
                     throw IOException("Impossible de finaliser l'installation Linux")
                 }
+                prepareRuntimeFilesystem(targetDir)
                 configureKaliLogin(targetDir)
                 backupDir.deleteRecursively()
                 archive.delete()
@@ -470,6 +472,57 @@ class LinuxInstaller(
         Os.chmod(file.absolutePath, (mode and 0x1ff) or ownerAccess)
     }
 
+    /**
+     * Rend les répertoires utilisés par apt/dpkg explicitement accessibles dans
+     * le sandbox de l'application. Les propriétaires Unix du tar restent ceux
+     * de l'archive, mais sur Android les fichiers sont extraits avec l'UID de
+     * l'application ; PRoot simule ensuite root à l'intérieur du rootfs.
+     */
+    private fun prepareRuntimeFilesystem(rootfs: File) {
+        val writableDirectories = listOf(
+            "tmp",
+            "var/tmp",
+            "var/cache/apt",
+            "var/cache/apt/archives",
+            "var/lib/apt",
+            "var/lib/apt/lists",
+            "var/lib/apt/lists/partial",
+            "var/lib/dpkg",
+            "run",
+            "root"
+        )
+        writableDirectories.forEach { relative ->
+            val directory = File(rootfs, relative)
+            if (!directory.exists() && !directory.mkdirs()) {
+                throw IOException("Impossible de créer le répertoire Linux : /$relative")
+            }
+            applyMode(directory, if (relative == "tmp" || relative == "var/tmp") 0x1ff else 0x1ed, true)
+        }
+
+        // Certains rootfs livrent resolv.conf comme un lien vers systemd-resolved,
+        // service qui n'existe pas dans une session PRoot Android.
+        val resolv = File(rootfs, "etc/resolv.conf")
+        if (resolv.isDirectory) resolv.deleteRecursively()
+        if (resolv.isFile || java.nio.file.Files.isSymbolicLink(resolv.toPath())) {
+            if (!resolv.delete()) {
+                throw IOException("Impossible de remplacer /etc/resolv.conf")
+            }
+        }
+        resolv.parentFile?.mkdirs()
+        resolv.writeText(
+            "# DNS géré par l'environnement Linux embarqué\n" +
+                "nameserver 1.1.1.1\n" +
+                "nameserver 8.8.8.8\n"
+        )
+        applyMode(resolv, 0x1a4)
+
+        val hosts = File(rootfs, "etc/hosts")
+        if (!hosts.isFile) {
+            hosts.writeText("127.0.0.1 localhost\n::1 localhost\n")
+            applyMode(hosts, 0x1a4)
+        }
+    }
+
     private fun configureKaliLogin(rootfs: File) {
         val login = File(rootfs, "usr/local/sbin/void-kali-login")
         login.parentFile?.mkdirs()
@@ -513,8 +566,14 @@ exec /bin/bash --noprofile --norc -i
             )
         }
 
-        val aptCommand = "apt-get update && apt-get install -y --no-install-recommends " +
-            packages.joinToString(" ")
+        val aptCommand = "set -e; " +
+            "export HOME=/root TMPDIR=/tmp DEBIAN_FRONTEND=noninteractive; " +
+            "mkdir -p /tmp /var/tmp /var/cache/apt/archives /var/lib/apt/lists/partial /var/lib/dpkg; " +
+            "chmod 1777 /tmp /var/tmp; " +
+            "dpkg --configure -a || true; " +
+            "apt-get update; " +
+            "apt-get install -y --no-install-recommends " + packages.joinToString(" ") + "; " +
+            "apt-get clean"
         val command = listOf(
             proot.absolutePath,
             "--link2symlink",
@@ -522,7 +581,6 @@ exec /bin/bash --noprofile --norc -i
             "-r", rootfs.absolutePath,
             "-b", "/dev",
             "-b", "/proc",
-            "-b", "/sys",
             "-b", "${host.homeDir.absolutePath}:/root",
             "-w", "/root",
             "/usr/bin/env",

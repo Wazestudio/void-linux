@@ -95,7 +95,6 @@ class LinuxSession(
                         "-r", rootfs.absolutePath,
                         "-b", "/dev",
                         "-b", "/proc",
-                        "-b", "/sys",
                         "-b", "${host.homeDir.absolutePath}:/root",
                         "-w", "/root"
                     )
@@ -110,7 +109,12 @@ class LinuxSession(
             val slave = pty[1]
             createdMaster = master
             createdSlave = slave
-            val prootTemp = File(context.cacheDir, "proot-tmp").apply { mkdirs() }
+            val prootTemp = File(context.cacheDir, "proot-tmp").apply {
+                if (!exists() && !mkdirs()) throw IllegalStateException("Impossible de créer le répertoire temporaire PRoot")
+                setReadable(true, true)
+                setWritable(true, true)
+                setExecutable(true, true)
+            }
             val environment = System.getenv().toMutableMap().apply {
                 put("LD_LIBRARY_PATH", context.applicationInfo.nativeLibraryDir)
                 put(
