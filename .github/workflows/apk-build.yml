@@ -43,7 +43,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # Optimisation du cache pour CMake
       - name: Cache CMake build
@@ -122,6 +121,13 @@ jobs:
           fi
 
       # CORRECTION : Désactivation stricte de Lint lors de l'assemblage + arguments Kotlin robustes
+      - name: Verify requested ABI
+        run: |
+          set -euo pipefail
+          case '${{ matrix.android-abi }}' in arm64-v8a|armeabi-v7a) ;; *) exit 1 ;; esac
+          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
+          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
+
       - name: Build APK (Release)
         run: |
           gradle clean assembleRelease \
