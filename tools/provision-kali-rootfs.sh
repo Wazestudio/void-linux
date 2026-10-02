@@ -29,14 +29,17 @@ QEMU_NAME="$(basename "$QEMU_PATH")"
 rootfs="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/kali-rootfs.XXXXXX")"
 mounted=()
 cleanup() {
-  for mountpoint in "${mounted[@]:-}"; do
-    sudo umount "$mountpoint" || true
-  done
+  if ((${#mounted[@]})); then
+    for mountpoint in "${mounted[@]}"; do
+      sudo umount "$mountpoint" || true
+    done
+  fi
   sudo rm -rf "$rootfs"
 }
 trap cleanup EXIT
 
 sudo tar -xJf "$archive" -C "$rootfs"
+sudo mkdir -p "$rootfs/usr/bin"
 sudo cp "$QEMU_PATH" "$rootfs/usr/bin/$QEMU_NAME"
 sudo rm -f "$rootfs/etc/resolv.conf"
 sudo cp /etc/resolv.conf "$rootfs/etc/resolv.conf"
