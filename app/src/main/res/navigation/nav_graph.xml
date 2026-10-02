@@ -2,7 +2,12 @@
 <navigation xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/terminalFragment">
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment
+        android:id="@+id/dashboardFragment"
+        android:name="com.voidlinux.DashboardFragment"
+        android:label="Accueil" />
 
     <fragment
         android:id="@+id/terminalFragment"

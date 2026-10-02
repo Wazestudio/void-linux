@@ -26,6 +26,8 @@ object Constants {
     const val DISTRO_DEBIAN = "debian"
     const val DISTRO_UBUNTU = "ubuntu"
     const val DISTRO_ALPINE = "alpine"
+    const val PREF_LINUX = "linux_environment"
+    const val PREF_AUTO_INITIALIZATION_DISABLED = "auto_initialization_disabled"
 
     // URLs rootfs (Kali NetHunter)
     const val KALI_ROOTFS_ARM64_URL =
@@ -37,10 +39,6 @@ object Constants {
 
     const val KALI_ROOTFS_ARM64_NAME = "kali-arm64.tar.xz"
     const val KALI_ROOTFS_ARMHF_NAME = "kali-armhf.tar.xz"
-
-    // Outils Kali installés au premier démarrage du terminal
-    const val KALI_TOOLS_MARKER = "/var/lib/void-linux/.tools-ready"
-    const val KALI_TOOLS_SCRIPT = "/usr/local/sbin/void-kali-tools"
 
     // Tor
     const val TOR_SOCKS_PORT = 9050

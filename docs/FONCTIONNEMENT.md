@@ -8,10 +8,11 @@ téléphone ARM64 n'ont pas encore été confirmés.
 
 ## 1. Résumé
 
-Void-Linux est une application Android modulaire. Son objectif principal est
-d'installer un rootfs Kali Linux ARM64 dans le stockage privé de l'application,
-puis d'ouvrir un shell Linux dans un terminal intégré. Le shell est lancé par
-PRoot, sans obtenir les privilèges root du système Android.
+Void-Linux est une application Android modulaire. La CI prépare des APK
+distincts ARM64 et ARM 32 bits, chacun intégrant le rootfs Kali correspondant
+et le moteur PRoot natif. Au premier lancement, l'application extrait
+automatiquement le rootfs intégré dans son stockage privé, puis ouvre un shell
+Linux avec PRoot, sans obtenir les privilèges root du système Android.
 
 L'application comprend aussi un navigateur qui utilise le proxy SOCKS local
 d'Orbot pour les requêtes HTTP(S), ainsi que des écrans et composants pour
@@ -32,26 +33,24 @@ Les valeurs définies dans le projet sont :
 |---|---|
 | Android minimal | API 29 (Android 10) |
 | Android compilé pour | API 34 |
-| ABI native empaquetée | `arm64-v8a` uniquement |
+| ABI native empaquetée | `arm64-v8a` ou `armeabi-v7a`, selon l'APK |
 | JDK et cible JVM | Java 17 |
 | Android Gradle Plugin | 8.5.2 |
 | Gradle utilisé par la CI | 8.7 |
 | Kotlin | 1.9.24 |
-| Rootfs Linux proposé | Kali NetHunter minimal ARM64 |
+| Rootfs Linux proposé | Kali NetHunter minimal ARM64 ou ARMHF |
 
-Il faut un appareil ARM64, une connexion Internet pour les téléchargements et
-plusieurs gigaoctets de stockage privé libre. Avant le téléchargement,
-l'installateur estime le besoin à environ huit fois la taille annoncée de
-l'archive; pendant l'extraction, il conserve une marge minimale de 256 Mio.
-Cette estimation ne garantit pas que le stockage disponible suffira à
-l'utilisation ultérieure.
+Il faut un appareil ARM 32 ou 64 bits et plusieurs centaines de Mo libres pour
+extraire le rootfs. Le rootfs de base est inclus dans l'APK, donc la première
+initialisation ne requiert pas de téléchargement réseau; les dépôts APT et les
+collections d'outils supplémentaires nécessitent Internet.
 
 Le rootfs et le moteur PRoot sont deux composants différents :
 
-1. L'application télécharge et extrait le rootfs Kali au moment de
-   l'installation.
-2. Le moteur PRoot et ses bibliothèques doivent être construits pendant la
-   compilation de l'APK (ou fournis par un build qui les a déjà générés).
+1. La CI intègre l'archive rootfs Kali correspondant à l'ABI de l'APK.
+2. Au premier lancement de l'application, le rootfs est extrait automatiquement
+   l'archive dans ses données privées.
+3. Le moteur PRoot et ses bibliothèques sont compilés pour la même ABI.
 
 Le fichier `library/proot-engin/proot-engine/src/main/jnilibs/arm64-v8a/.gitkeep`
 est un marqueur de dossier, pas un moteur PRoot utilisable. La CI génère les
@@ -61,10 +60,11 @@ bibliothèques natives avant de lancer Gradle.
 
 ### Depuis l'application
 
-1. Installer et ouvrir l'APK.
-2. Ouvrir l'écran Linux et lancer l'installation de Kali.
-3. Laisser le téléchargement et l'extraction se terminer sans fermer
-   l'application ni manquer d'espace.
+1. Installer et ouvrir l'APK de l'architecture correspondante.
+2. Laisser l'initialisation automatique du rootfs intégré se terminer; sa
+   progression s'affiche sur le tableau de bord.
+3. Laisser l'extraction se terminer sans fermer l'application ni manquer
+   d'espace.
 4. Ouvrir le terminal et démarrer une session.
 5. Installer les outils Linux voulus avec `apt`, selon leur disponibilité
    pour Kali et ARM64.
@@ -84,7 +84,6 @@ Dans le shell Kali :
 apt update
 apt search john
 apt install john
-apt install nmap
 ```
 
 `apt update` actualise les index depuis les dépôts configurés dans le rootfs.
@@ -137,38 +136,29 @@ restrictions de l'OS. Les opérations qui exigent réellement ces capacités
 
 ## 5. Téléchargements et connexions réseau
 
-### Installation de Kali
+### Image Kali intégrée et initialisation
 
-L'URL actuellement configurée pour l'image ARM64 est :
+La CI télécharge l'image officielle correspondante à l'ABI :
 
-`https://kali.download/nethunter-images/current/rootfs/kali-nethunter-rootfs-minimal-arm64.tar.xz`
+- ARM64 : `kali-nethunter-rootfs-minimal-arm64.tar.xz`;
+- ARM 32 bits : `kali-nethunter-rootfs-minimal-armhf.tar.xz`.
 
-L'installateur :
-
-- exige une URL HTTPS, suit les redirections HTTPS et refuse une destination
-  finale non HTTPS;
-- télécharge l'archive dans un fichier temporaire dans le cache privé;
-- vérifie le code HTTP et, si le serveur fournit une taille, la complétude du
-  transfert;
-- décompresse XZ puis TAR dans un dossier de staging;
-- vérifie notamment la présence de Bash et d'`apt-get`;
-- ne remplace l'installation courante qu'après une extraction considérée
-  valide.
-
-Le code ne vérifie pas actuellement une somme SHA-256 ou une signature
-cryptographique de l'archive avant extraction. HTTPS protège le transport,
-mais ne remplace pas cette vérification d'intégrité indépendante.
-L'URL contient `current`, donc la version du rootfs peut évoluer côté serveur
-sans changement de version de l'application.
+Après vérification du SHA-256 officiel, la CI utilise QEMU et `chroot` pour
+préinstaller `curl`, `nmap`, `dnsutils` et `whois`, puis intègre l'archive
+compressée dans l'APK correspondant. Au premier lancement de l'application,
+celle-ci extrait automatiquement cette archive dans son stockage privé et
+vérifie le rootfs avant de le rendre disponible. Les collections `Réseau et DNS`,
+`Web et développement` et `Analyse locale` de l'écran Linux sont installées
+à la demande depuis APT et nécessitent Internet.
 
 ### Construction de PRoot pour l'APK
 
 Le script `tools/build-proot.sh` récupère le dépôt GitHub
 [termux/termux-packages](https://github.com/termux/termux-packages) à la
 révision épinglée dans le script. Il demande à l'environnement Docker de
-Termux de construire les paquets ARM64 `proot`, `libtalloc` et
+Termux de construire les paquets `proot`, `libtalloc` et
 `libandroid-shmem`, extrait leurs fichiers `.deb`, puis prépare les fichiers
-natifs attendus par l'application :
+natifs attendus par l'application en `arm64-v8a` ou `armeabi-v7a` :
 
 - `libproot.so` — exécutable PRoot renommé pour être empaqueté comme
   bibliothèque native;
@@ -177,9 +167,10 @@ natifs attendus par l'application :
 
 `patchelf` ajuste les noms de bibliothèques et le chemin de recherche afin que
 PRoot trouve ses dépendances empaquetées. Cela ne signifie pas que l'intégralité
-des paquets Linux est contenue dans l'APK : seuls le moteur et les bibliothèques
-nécessaires à son lancement sont embarqués. Le rootfs Kali est téléchargé
-séparément sur l'appareil.
+des paquets Linux est contenue dans l'APK : le moteur, ses bibliothèques et
+l'archive du rootfs Kali minimal sont embarqués. L'application extrait le
+rootfs dans son stockage privé au premier lancement; les collections APT
+supplémentaires sont téléchargées sur l'appareil à la demande.
 
 ### Installation des paquets Kali
 
@@ -224,7 +215,7 @@ Project plutôt que sur une promesse de cette application.
 | Android NDK et CMake | Compilation de la bibliothèque JNI native |
 | JNI et C | PTY, lecture/écriture du terminal et lancement/attente des processus |
 | PRoot de Termux | Exécuter le rootfs avec une identité root simulée, sans root Android |
-| Kali NetHunter rootfs | Distribution invitée, système de fichiers minimal ARM64 |
+| Kali NetHunter rootfs | Distribution invitée, système de fichiers minimal ARM64 ou ARMHF |
 | Apache Commons Compress | Lecture des entrées TAR et gestion des métadonnées d'archive |
 | XZ for Java | Décompression de l'archive `.tar.xz` sur Android |
 | Bash et apt | Shell interactif et gestionnaire de paquets à l'intérieur de Kali |
@@ -242,7 +233,7 @@ Les versions des dépendances Android sont déclarées dans
 
 | Fonction | Ce que le code prévoit | Réserve |
 |---|---|---|
-| Kali Linux ARM64 | Téléchargement, extraction du rootfs et validation des fichiers de base | Le build APK et l'installation réelle sur appareil restent à valider |
+| Kali Linux ARM64/ARMHF | Rootfs correspondant intégré à l'APK, extraction automatique et validation des fichiers de base | Le build APK et l'installation réelle sur appareil restent à valider |
 | Terminal Linux | PTY natif et démarrage de Bash via PRoot | Le fonctionnement interactif et les opérations `apt` doivent être testés sur un téléphone compatible |
 | Navigateur Tor | Orbot externe, test du proxy et requêtes HTTP(S) via SOCKS | Ce n'est pas un VPN global; les requêtes non GET sont refusées par l'intercepteur |
 | Windows / Wine / Box64 | Écrans et classes de logique existent | La présence et la compatibilité des binaires requis ne sont pas établies par ce guide; ne pas considérer l'exécution de `.exe` comme garantie |
@@ -299,8 +290,8 @@ l'APK est compilable.
 - **Pas de noyau invité :** les appels au noyau restent ceux d'Android.
 - **Pas de root Android :** les privilèges simulés dans PRoot restent soumis
   aux permissions de l'application.
-- **Architecture :** l'APK ne fournit que le runtime ARM64; un appareil
-  uniquement 32 bits ou x86/x86_64 n'est pas pris en charge par ce build.
+- **Architecture :** seuls les appareils ARM 32 bits et ARM64 sont ciblés,
+  via deux APKs séparés. x86/x86_64 n'est pas pris en charge.
 - **Outils incomplets :** des paquets peuvent s'installer mais ne pas
   fonctionner s'ils ont besoin de capacités noyau, de modules, d'accès brut au
   réseau, de pilotes ou de matériel non exposés par Android.

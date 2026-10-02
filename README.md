@@ -32,7 +32,7 @@ garanties comme opérationnelles. Consulte le
 > limites et l'état de validation des fonctionnalités, voir le
 > [guide complet en français](docs/FONCTIONNEMENT.md).
 
-- 🐉 Rootfs Kali minimal ARM64 installable avec PRoot (sans root Android)
+- 🐉 Rootfs Kali minimal ARM64/ARMHF avec PRoot (sans root Android)
 - 💻 Terminal intégré prévu pour une session Linux lorsque le moteur natif est présent
 - 🧅 Navigateur utilisant le proxy SOCKS d'Orbot; Orbot doit être installé séparément
 - 🧪 Écrans et composants expérimentaux pour Windows, sécurité et localisation
@@ -46,21 +46,27 @@ vérifications encore nécessaires.
 
 ### 🐉 Environnement Linux
 
-- Téléchargement puis extraction du rootfs minimal Kali ARM64 dans le stockage privé de l'application
+- Rootfs minimal Kali ARM64 ou ARMHF intégré à l'APK selon l'architecture du build
+- Initialisation automatique du rootfs intégré dès le premier lancement de l'application
 - Aucun root Android requis; l'isolation du rootfs repose sur PRoot
 - Session shell interactive dans l'onglet Terminal
 - Installation des paquets Kali avec `apt`
-- L'installation du rootfs nécessite plusieurs Go d'espace libre et une connexion Internet
+- Initialisation locale du rootfs; Internet requis pour APT et les collections optionnelles
 
-Le rootfs Kali et le moteur PRoot Android sont deux éléments distincts. La CI construit PRoot
-et ses bibliothèques à partir des paquets officiels Termux avant de créer l'APK. Le support
-fourni actuellement est limité à ARM64.
+Le rootfs Kali et le moteur PRoot Android sont deux éléments distincts. La CI produit
+deux APK distincts : ARM64 (`arm64-v8a`) et ARM 32 bits (`armeabi-v7a`), chacun avec son
+rootfs et son moteur PRoot correspondants. Choisis l'APK qui correspond à ton appareil.
+L'archive compressée du rootfs est incluse dans l'APK; Android l'extrait vers le stockage
+privé au premier lancement de l'application, sans téléchargement ni étape manuelle. L'espace
+libre requis après extraction reste de plusieurs centaines de Mo, selon la version du rootfs.
+Chaque image inclut aussi `curl`, `nmap`, `dig` et `whois`. Les autres collections sont
+installables à la demande depuis l'onglet Linux.
 
-Exemple, dans le terminal Kali une fois PRoot fourni et le rootfs installé:
+Exemple, dans le terminal Kali :
 
 ```sh
 apt update
-apt install john nmap
+apt install john
 ```
 
 N'utilise les outils que sur tes systèmes ou dans des laboratoires pour lesquels tu as une autorisation.

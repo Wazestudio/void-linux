@@ -9,6 +9,7 @@ local.properties
 *.iml
 .cxx/
 /native/src/main/jniLibs/arm64-v8a/*.so
+/native/src/main/jniLibs/armeabi-v7a/*.so
 .DS_Store
 *.jks
 *.keystore

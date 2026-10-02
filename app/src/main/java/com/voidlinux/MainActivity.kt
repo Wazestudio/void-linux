@@ -7,8 +7,10 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
+import com.voidlinux.feature.linux.LinuxBootstrapViewModel
 import com.voidlinux.databinding.ActivityMainBinding
 import com.voidlinux.service.VoidForegroundService
 
@@ -23,6 +25,7 @@ class MainActivity : AppCompatActivity() {
         if (notifGranted) {
             VoidForegroundService.start(this)
         }
+        initializeLinux()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +58,11 @@ class MainActivity : AppCompatActivity() {
             requestPermissions.launch(perms.toTypedArray())
         } else {
             VoidForegroundService.start(this)
+            initializeLinux()
         }
+    }
+
+    private fun initializeLinux() {
+        ViewModelProvider(this)[LinuxBootstrapViewModel::class.java].ensureInitialized()
     }
 }

@@ -19,7 +19,9 @@ data class LinuxUiState(
     val progress: Int = 0,
     val statusMessage: String = "",
     val errorMessage: String? = null,
-    val nativeReady: Boolean = false
+    val nativeReady: Boolean = false,
+    val installingTools: Boolean = false,
+    val toolOutput: String = ""
 )
 
 class LinuxViewModel(app: Application) : AndroidViewModel(app) {
@@ -56,6 +58,29 @@ class LinuxViewModel(app: Application) : AndroidViewModel(app) {
     fun selectDistro(distroId: String) {
         _uiState.value = _uiState.value.copy(distroId = distroId)
         refresh()
+    }
+
+    fun updateBootstrapState(state: LinuxBootstrapState) {
+        if (_uiState.value.distroId != Constants.DISTRO_KALI) return
+        _uiState.value = when {
+            state.initializing -> _uiState.value.copy(
+                installing = true,
+                progress = state.progress,
+                statusMessage = "Préparation automatique de Kali…"
+            )
+            state.ready -> _uiState.value.copy(
+                installed = true,
+                installing = false,
+                progress = 100,
+                statusMessage = "Kali installé — prêt"
+            )
+            state.errorMessage != null -> _uiState.value.copy(
+                installing = false,
+                errorMessage = state.errorMessage,
+                statusMessage = "Échec de la préparation automatique"
+            )
+            else -> _uiState.value
+        }
     }
 
     fun install() {
@@ -105,7 +130,41 @@ class LinuxViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun installToolCollection(collectionId: String) {
+        if (_uiState.value.installingTools) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                installingTools = true,
+                toolOutput = "",
+                errorMessage = null,
+                statusMessage = "Installation des outils en cours…"
+            )
+            val result = repo.installToolCollection(collectionId) { line ->
+                val output = (_uiState.value.toolOutput + line + "\n")
+                    .takeLast(MAX_TOOL_OUTPUT_CHARS)
+                _uiState.value = _uiState.value.copy(toolOutput = output)
+            }
+            _uiState.value = when (result) {
+                is VoidResult.Success -> _uiState.value.copy(
+                    installingTools = false,
+                    statusMessage = "Collection installée — utilise les outils dans le terminal"
+                )
+                is VoidResult.Error -> _uiState.value.copy(
+                    installingTools = false,
+                    errorMessage = result.message,
+                    statusMessage = "Échec de l'installation des outils"
+                )
+                else -> _uiState.value.copy(installingTools = false)
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    private companion object {
+        const val MAX_TOOL_OUTPUT_CHARS = 8_000
     }
 }

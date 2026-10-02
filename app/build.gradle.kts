@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val targetAbi = providers.gradleProperty("targetAbi").orElse("arm64-v8a").get()
+require(targetAbi in setOf("arm64-v8a", "armeabi-v7a")) {
+    "Unsupported Android ABI: $targetAbi"
+}
+
 val releaseStoreFile = providers.environmentVariable("RELEASE_STORE_FILE").orNull
 val releaseStorePassword = providers.environmentVariable("RELEASE_STORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("RELEASE_KEY_ALIAS").orNull
@@ -24,9 +29,10 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += targetAbi
         }
     }
 
@@ -69,6 +75,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     lint {

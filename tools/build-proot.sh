@@ -3,8 +3,22 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/void-linux-termux-packages"
-OUTPUT_DIR="$ROOT_DIR/native/src/main/jniLibs/arm64-v8a"
 TERMUX_PACKAGES_REF="2d31765cdab30bbf92f87c495bef6b963df168e5"
+
+ANDROID_ABI="${1:-arm64-v8a}"
+case "$ANDROID_ABI" in
+    arm64-v8a)
+        TERMUX_ARCH="aarch64"
+        ;;
+    armeabi-v7a)
+        TERMUX_ARCH="arm"
+        ;;
+    *)
+        echo "Unsupported Android ABI: $ANDROID_ABI" >&2
+        exit 1
+        ;;
+esac
+OUTPUT_DIR="$ROOT_DIR/native/src/main/jniLibs/$ANDROID_ABI"
 
 # Vraies adresses officielles
 TERMUX_PACKAGES_REPO="https://github.com/termux/termux-packages"
@@ -33,13 +47,13 @@ export TERMUX_PACKAGES_REVISION="master"
 
 # 2. Compilation de PRoot dans Docker
 echo "Démarrage de la compilation PRoot dans Docker..."
-./scripts/run-docker.sh ./build-package.sh -f -C -a aarch64 proot
+./scripts/run-docker.sh ./build-package.sh -f -C -a "$TERMUX_ARCH" proot
 
 # 3. Téléchargement des dépendances officielles
 # On lit l'index officiel Termux pour trouver le nom exact du fichier (pas de version devinée).
 echo "Téléchargement des dépendances pré-compilées..."
 PACKAGES_INDEX="$WORK_DIR/Packages.index"
-curl -fsSL -o "$PACKAGES_INDEX" "$TERMUX_APT_BASE/dists/stable/main/binary-aarch64/Packages"
+curl -fsSL -o "$PACKAGES_INDEX" "$TERMUX_APT_BASE/dists/stable/main/binary-$TERMUX_ARCH/Packages"
 
 download_termux_deb() {
     local package="$1"
@@ -86,7 +100,7 @@ mkdir -p "$STAGE_DIR"
 
 # Extraction de PRoot (généré par Docker) et des librairies (téléchargées)
 for package in proot libtalloc libandroid-shmem; do
-    deb="$(find_deb "${package}_*_aarch64.deb")"
+    deb="$(find_deb "${package}_*_${TERMUX_ARCH}.deb")"
     dpkg-deb -x "$deb" "$STAGE_DIR"
 done
 
@@ -144,4 +158,4 @@ for library in libtalloc.so libandroid-shmem.so; do
     fi
 done
 
-echo "Built Termux PRoot for arm64-v8a in $OUTPUT_DIR"
+echo "Built Termux PRoot for $ANDROID_ABI in $OUTPUT_DIR"

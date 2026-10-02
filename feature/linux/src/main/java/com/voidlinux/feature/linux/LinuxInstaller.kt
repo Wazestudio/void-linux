@@ -7,6 +7,8 @@ import androidx.core.app.NotificationCompat
 import com.voidlinux.core.common.Constants
 import com.voidlinux.core.common.VoidResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -33,81 +35,106 @@ class LinuxInstaller(
         distro: DistroCatalog.Distro,
         onProgress: (Int) -> Unit = {}
     ): VoidResult<File> = withContext(Dispatchers.IO) {
-        notifier.showStart(distro.displayName)
-        val stagingDir = File(host.rootfsDir, "${distro.id}.installing")
-        val backupDir = File(host.rootfsDir, "${distro.id}.backup")
-        val archive = File(host.tmpDir, distro.archiveName)
-        val partialArchive = File(host.tmpDir, "${distro.archiveName}.part")
-
-        try {
-            host.tmpDir.mkdirs()
-            var bundledRootfs = false
-            if (!archive.isFile || archive.length() == 0L) {
-                if (!partialArchive.isFile || partialArchive.length() == 0L) {
-                    bundledRootfs = copyBundledRootfsIfAvailable(distro, partialArchive)
-                }
-                if (bundledRootfs && !partialArchive.renameTo(archive)) {
-                    throw IOException("Impossible de préparer le rootfs intégré")
-                }
-            }
-
-            if (!bundledRootfs) {
-                val expectedSha256 = fetchExpectedSha256(distro.url)
-                if (!archive.isFile || sha256(archive) != expectedSha256) {
-                    archive.delete()
-                    downloadAndVerify(distro, expectedSha256, partialArchive) { progress ->
-                        val overall = progress / 2
-                        notifier.update(distro.displayName, overall)
-                        onProgress(overall)
-                    }
-                    if (!partialArchive.renameTo(archive)) {
-                        throw IOException("Impossible de finaliser le téléchargement")
-                    }
-                }
-            }
-
-            stagingDir.deleteRecursively()
-            stagingDir.mkdirs()
-            extractRootfs(archive, stagingDir) { progress ->
-                val overall = 50 + progress / 2
-                notifier.update(distro.displayName, overall)
-                onProgress(overall)
-            }
-
-            if (!File(stagingDir, "bin/bash").exists() ||
-                !File(stagingDir, "usr/bin/apt-get").exists()
-            ) {
-                throw IOException("L'archive téléchargée ne contient pas un rootfs Kali valide")
-            }
-
-            if (backupDir.exists()) backupDir.deleteRecursively()
+        installationMutex.withLock {
             val targetDir = host.rootfsFor(distro.id)
-            if (targetDir.exists() && !targetDir.renameTo(backupDir)) {
-                throw IOException("Impossible de sauvegarder l'installation Linux existante")
+            if (isInstalled(distro.id)) {
+                configureKaliLogin(targetDir)
+                return@withLock VoidResult.Success(targetDir)
             }
-            if (!stagingDir.renameTo(targetDir)) {
-                if (backupDir.exists()) backupDir.renameTo(targetDir)
-                throw IOException("Impossible de finaliser l'installation Linux")
+
+            notifier.showStart(distro.displayName)
+            val stagingDir = File(host.rootfsDir, "${distro.id}.installing")
+            val backupDir = File(host.rootfsDir, "${distro.id}.backup")
+            val (assetName, archiveName, downloadUrl) = rootfsSource(distro)
+            val archive = File(host.tmpDir, archiveName)
+            val partialArchive = File(host.tmpDir, "$archiveName.part")
+
+            try {
+                host.tmpDir.mkdirs()
+                var bundledRootfs = false
+                if (!archive.isFile || archive.length() == 0L) {
+                    if (!partialArchive.isFile || partialArchive.length() == 0L) {
+                        bundledRootfs = copyBundledRootfsIfAvailable(assetName, partialArchive)
+                    }
+                    if (bundledRootfs && !partialArchive.renameTo(archive)) {
+                        throw IOException("Impossible de préparer le rootfs intégré")
+                    }
+                }
+
+                if (!bundledRootfs) {
+                    val expectedSha256 = fetchExpectedSha256(downloadUrl)
+                    if (!archive.isFile || sha256(archive) != expectedSha256) {
+                        archive.delete()
+                        downloadAndVerify(downloadUrl, expectedSha256, partialArchive) { progress ->
+                            val overall = progress / 2
+                            notifier.update(distro.displayName, overall)
+                            onProgress(overall)
+                        }
+                        if (!partialArchive.renameTo(archive)) {
+                            throw IOException("Impossible de finaliser le téléchargement")
+                        }
+                    }
+                }
+
+                stagingDir.deleteRecursively()
+                stagingDir.mkdirs()
+                extractRootfs(archive, stagingDir) { progress ->
+                    val overall = 50 + progress / 2
+                    notifier.update(distro.displayName, overall)
+                    onProgress(overall)
+                }
+
+                if (!File(stagingDir, "bin/bash").exists() ||
+                    !File(stagingDir, "usr/bin/apt-get").exists()
+                ) {
+                    throw IOException("L'archive téléchargée ne contient pas un rootfs Kali valide")
+                }
+
+                if (backupDir.exists()) backupDir.deleteRecursively()
+                if (targetDir.exists() && !targetDir.renameTo(backupDir)) {
+                    throw IOException("Impossible de sauvegarder l'installation Linux existante")
+                }
+                if (!stagingDir.renameTo(targetDir)) {
+                    if (backupDir.exists()) backupDir.renameTo(targetDir)
+                    throw IOException("Impossible de finaliser l'installation Linux")
+                }
+                configureKaliLogin(targetDir)
+                backupDir.deleteRecursively()
+                archive.delete()
+                onProgress(100)
+                notifier.showComplete(distro.displayName)
+                VoidResult.Success(targetDir)
+            } catch (e: Exception) {
+                stagingDir.deleteRecursively()
+                notifier.showError(distro.displayName, e.message ?: "Erreur inconnue")
+                VoidResult.Error("Échec de l'installation Kali", e)
             }
-            installKaliToolBootstrap(targetDir)
-            backupDir.deleteRecursively()
-            archive.delete()
-            onProgress(100)
-            notifier.showComplete(distro.displayName)
-            VoidResult.Success(targetDir)
-        } catch (e: Exception) {
-            stagingDir.deleteRecursively()
-            notifier.showError(distro.displayName, e.message ?: "Erreur inconnue")
-            VoidResult.Error("Échec de l'installation Kali", e)
+        }
+    }
+
+    private fun rootfsSource(distro: DistroCatalog.Distro): Triple<String, String, String> {
+        if (distro.id != Constants.DISTRO_KALI) {
+            return Triple("", distro.archiveName, distro.url)
+        }
+        return when (BuildConfig.TARGET_ABI) {
+            "armeabi-v7a" -> Triple(
+                "kali-armhf.tar.xz",
+                Constants.KALI_ROOTFS_ARMHF_NAME,
+                Constants.KALI_ROOTFS_ARMHF_URL
+            )
+            else -> Triple(
+                "kali-arm64.tar.xz",
+                Constants.KALI_ROOTFS_ARM64_NAME,
+                Constants.KALI_ROOTFS_ARM64_URL
+            )
         }
     }
 
     private fun copyBundledRootfsIfAvailable(
-        distro: DistroCatalog.Distro,
+        assetName: String,
         target: File
     ): Boolean {
-        if (distro.id != Constants.DISTRO_KALI) return false
-        val assetName = "kali-arm64.tar.xz"
+        if (assetName.isEmpty()) return false
         return try {
             context.assets.open(assetName).use { input ->
                 FileOutputStream(target).use { output ->
@@ -143,7 +170,7 @@ class LinuxInstaller(
     }
 
     private fun downloadAndVerify(
-        distro: DistroCatalog.Distro,
+        url: String,
         expectedSha256: String,
         target: File,
         onProgress: (Int) -> Unit
@@ -151,7 +178,7 @@ class LinuxInstaller(
         var lastError: IOException? = null
         repeat(MAX_DOWNLOAD_ATTEMPTS) { attempt ->
             try {
-                downloadFile(distro.url, target, onProgress)
+                downloadFile(url, target, onProgress)
                 if (sha256(target) == expectedSha256) return
                 target.delete()
                 lastError = IOException("La somme SHA-256 du rootfs téléchargé ne correspond pas")
@@ -438,29 +465,10 @@ class LinuxInstaller(
         Os.chmod(file.absolutePath, (mode and 0x1ff) or ownerAccess)
     }
 
-    private fun installKaliToolBootstrap(rootfs: File) {
-        val script = File(rootfs, "usr/local/sbin/void-kali-tools")
-        script.parentFile?.mkdirs()
-        script.writeText("""#!/bin/bash
-set -e
-export DEBIAN_FRONTEND=noninteractive
-mkdir -p /var/lib/void-linux
-if [ -f /var/lib/void-linux/.tools-ready ]; then
-    exit 0
-fi
-printf '%s\n' '[Void-Linux] Initialisation des paquets Kali...'
-apt-get update
-apt-get install -y --no-install-recommends ca-certificates gnupg
-apt-get install -y kali-linux-default tor
-touch /var/lib/void-linux/.tools-ready
-printf '%s\n' '[Void-Linux] Paquets Kali installés.'
-""".trimIndent())
-        Os.chmod(script.absolutePath, 0x1ed)
-
+    private fun configureKaliLogin(rootfs: File) {
         val login = File(rootfs, "usr/local/sbin/void-kali-login")
+        login.parentFile?.mkdirs()
         login.writeText("""#!/bin/bash
-set -e
-/usr/local/sbin/void-kali-tools
 exec /bin/bash --noprofile --norc -i
 """.trimIndent())
         Os.chmod(login.absolutePath, 0x1ed)
@@ -474,7 +482,93 @@ exec /bin/bash --noprofile --norc -i
     fun uninstall(distro: String): Boolean =
         host.rootfsFor(distro).deleteRecursively()
 
+    suspend fun installPackages(
+        packages: List<String>,
+        onOutput: (String) -> Unit
+    ): VoidResult<Unit> = withContext(Dispatchers.IO) {
+        if (packages.isEmpty() || packages.any { !PACKAGE_NAME_REGEX.matches(it) }) {
+            return@withContext VoidResult.Error(
+                "Liste de paquets invalide",
+                IllegalArgumentException("Les noms de paquets ne sont pas valides")
+            )
+        }
+        val rootfs = host.rootfsFor(Constants.DISTRO_KALI)
+        if (!isInstalled(Constants.DISTRO_KALI)) {
+            return@withContext VoidResult.Error(
+                "Kali doit être initialisé avant d'ajouter des outils",
+                IOException("Rootfs Kali absent")
+            )
+        }
+        val proot = File(host.nativeLibsDir, "libproot.so")
+        val loader = File(host.nativeLibsDir, "libproot_loader.so")
+        if (!proot.isFile || !loader.isFile) {
+            return@withContext VoidResult.Error(
+                "Moteur PRoot indisponible pour installer les outils",
+                IOException("Runtime PRoot incomplet")
+            )
+        }
+
+        val aptCommand = "apt-get update && apt-get install -y --no-install-recommends " +
+            packages.joinToString(" ")
+        val command = listOf(
+            proot.absolutePath,
+            "--link2symlink",
+            "-0",
+            "-r", rootfs.absolutePath,
+            "-b", "/dev",
+            "-b", "/proc",
+            "-b", "/sys",
+            "-b", "${host.homeDir.absolutePath}:/root",
+            "-w", "/root",
+            "/usr/bin/env",
+            "-i",
+            "HOME=/root",
+            "USER=root",
+            "LOGNAME=root",
+            "TERM=xterm-256color",
+            "LANG=C.UTF-8",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "DEBIAN_FRONTEND=noninteractive",
+        ) + LinuxNetworkRoute.variables(context).map { (name, value) -> "$name=$value" } +
+            listOf("/bin/bash", "-lc", aptCommand)
+
+        var process: Process? = null
+        try {
+            val tempDir = File(context.cacheDir, "proot-tmp").apply { mkdirs() }
+            process = ProcessBuilder(command)
+                .redirectErrorStream(true)
+                .apply {
+                    environment()["LD_LIBRARY_PATH"] = host.nativeLibsDir.absolutePath
+                    environment()["PROOT_LOADER"] = loader.absolutePath
+                    environment()["PROOT_TMP_DIR"] = tempDir.absolutePath
+                    environment().putAll(LinuxNetworkRoute.variables(context))
+                }
+                .start()
+            process.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                lines.forEach(onOutput)
+            }
+            val exitCode = process.waitFor()
+            if (exitCode == 0) {
+                VoidResult.Success(Unit)
+            } else {
+                VoidResult.Error(
+                    "APT n'a pas pu installer les outils (code $exitCode)",
+                    IOException("Processus APT terminé avec le code $exitCode")
+                )
+            }
+        } catch (e: IOException) {
+            process?.destroyForcibly()
+            VoidResult.Error("Échec de l'installation des outils", e)
+        } catch (e: InterruptedException) {
+            process?.destroyForcibly()
+            Thread.currentThread().interrupt()
+            VoidResult.Error("Installation des outils interrompue", e)
+        }
+    }
+
     private companion object {
+        val PACKAGE_NAME_REGEX = Regex("[a-z0-9][a-z0-9+.-]*")
+        val installationMutex = Mutex()
         const val CONNECT_TIMEOUT_MS = 30_000
         const val READ_TIMEOUT_MS = 60_000
         const val MAX_DOWNLOAD_ATTEMPTS = 3

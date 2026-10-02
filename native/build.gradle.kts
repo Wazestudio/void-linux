@@ -3,6 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val targetAbi = providers.gradleProperty("targetAbi").orElse("arm64-v8a").get()
+require(targetAbi in setOf("arm64-v8a", "armeabi-v7a")) {
+    "Unsupported Android ABI: $targetAbi"
+}
+
 android {
     // CORRECTION : "native" est un mot-clé réservé en Java. Remplacé par "core_native"
     namespace = "com.voidlinux.core_native"
@@ -11,7 +16,7 @@ android {
     defaultConfig {
         minSdk = 29
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += targetAbi
         }
         externalNativeBuild {
             cmake {

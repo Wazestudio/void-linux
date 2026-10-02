@@ -12,6 +12,14 @@ jobs:
     name: Build APK
     runs-on: ubuntu-latest
     environment: release-signing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - android-abi: arm64-v8a
+            rootfs-arch: arm64
+          - android-abi: armeabi-v7a
+            rootfs-arch: armhf
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,9 +52,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: native/.cxx
-          key: cmake-${{ runner.os }}-${{ hashFiles('native/src/main/cpp/**/*.c', 'native/src/main/cpp/**/*.cpp', 'native/CMakeLists.txt') }}
+          key: cmake-${{ runner.os }}-${{ matrix.android-abi }}-${{ hashFiles('native/src/main/cpp/**/*.c', 'native/src/main/cpp/**/*.cpp', 'native/CMakeLists.txt') }}
           restore-keys: |
-            cmake-${{ runner.os }}-
+            cmake-${{ runner.os }}-${{ matrix.android-abi }}-
 
       # Optimisation du cache pour l'image Docker de Termux Package Builder
       - name: Cache Docker layers
@@ -71,12 +79,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y patchelf dpkg curl
 
-      - name: Build official Termux PRoot (ARM64)
-        run: bash tools/build-proot.sh
+      - name: Build official Termux PRoot (${{ matrix.android-abi }})
+        run: bash tools/build-proot.sh "${{ matrix.android-abi }}"
 
-      # Téléchargement et intégration du Rootfs Kali Linux dans les assets de l'application
-      - name: Download and verify official Kali ARM64 rootfs
-        run: bash tools/fetch-kali-rootfs.sh arm64 app/src/main/assets
+      - name: Download and verify official Kali rootfs (${{ matrix.rootfs-arch }})
+        run: bash tools/fetch-kali-rootfs.sh "${{ matrix.rootfs-arch }}" app/src/main/assets
+
+      - name: Install QEMU for rootfs provisioning
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support
+          sudo update-binfmts --enable qemu-aarch64
+          sudo update-binfmts --enable qemu-arm
+
+      - name: Preinstall lightweight authorized security tools
+        run: sudo bash tools/provision-kali-rootfs.sh "${{ matrix.rootfs-arch }}" app/src/main/assets
 
       - name: Configure Android release signing
         env:
@@ -108,9 +125,9 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Build APKs (Debug & Release)
-        run: gradle clean assembleDebug assembleRelease --stacktrace --no-daemon
+        run: gradle clean assembleDebug assembleRelease -PtargetAbi="${{ matrix.android-abi }}" --stacktrace --no-daemon
 
-      - name: Verify release APK signature
+      - name: Verify release APK signature (${{ matrix.android-abi }})
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -126,7 +143,7 @@ jobs:
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: void-linux-debug
+          name: void-linux-debug-${{ matrix.android-abi }}
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
           if-no-files-found: error
@@ -134,7 +151,7 @@ jobs:
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: void-linux-release
+          name: void-linux-release-${{ matrix.android-abi }}
           path: app/build/outputs/apk/release/*.apk
           retention-days: 7
           if-no-files-found: error
@@ -159,14 +176,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          find artifacts/void-linux-release -name "*.apk" -exec cp {} release/ \;
+          for artifact in artifacts/void-linux-release-*; do
+            abi="${artifact##*void-linux-release-}"
+            find "$artifact" -name "*.apk" -exec cp {} "release/void-linux-${abi}.apk" \;
+          done
           if [ -z "$(ls -A release)" ]; then
             echo "::error::Aucun APK trouvé pour la release !"
             exit 1
           fi
-          for apk in release/*.apk; do
-            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
-          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -174,21 +191,19 @@ jobs:
           name: Void-Linux ${{ github.ref_name }}
           body: |
             ## Void-Linux ${{ github.ref_name }}
-            Environnement hacker tout-en-un sur Android.
+            Environnement Linux mobile pour l'apprentissage et le diagnostic de sécurité autorisé.
 
             ### Contenu
-            - Kali Linux via proot
-            - Terminal intégré
-            - Émulation Windows (Wine + Box64)
-            - Réseau Tor et navigation .onion
-            - Surveillance de sécurité
-            - Fausse position GPS
+            - Rootfs Kali minimal et terminal PRoot intégré
+            - APK ARM64 et ARM 32 bits
+            - Outils de base : curl, nmap, dig et whois
+            - Collections d'outils supplémentaires installables depuis Kali
 
             ### Installation
             1. Télécharge l'APK ci-dessous
             2. Active « Sources inconnues » dans les paramètres Android
             3. Installe l'APK
-            4. Lance Void-Linux
+            4. Lance Void-Linux et laisse l'initialisation du rootfs se terminer
           files: release/*.apk
           draft: false
           prerelease: false

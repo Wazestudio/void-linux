@@ -3,12 +3,18 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val targetAbi = providers.gradleProperty("targetAbi").orElse("arm64-v8a").get()
+require(targetAbi in setOf("arm64-v8a", "armeabi-v7a")) {
+    "Unsupported Android ABI: $targetAbi"
+}
+
 android {
     namespace = "com.voidlinux.feature.linux"
     compileSdk = 34
 
     defaultConfig {
         minSdk = 29
+        buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
     }
 
     compileOptions {
@@ -22,6 +28,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 

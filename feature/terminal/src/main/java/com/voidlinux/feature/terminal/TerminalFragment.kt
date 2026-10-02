@@ -52,11 +52,6 @@ class TerminalFragment : Fragment() {
         }
         binding.terminalView.requestFocus()
         viewModel.checkLinuxReady()
-        if (!viewModel.uiState.value.linuxReady) {
-            binding.terminalView.writeText(
-                "Kali n'est pas installé. Ouvre l'onglet Linux pour télécharger le rootfs.\r\n"
-            )
-        }
 
         binding.keyEsc.setOnClickListener { viewModel.writeInput("\u001B") }
         binding.keyTab.setOnClickListener { viewModel.writeInput("\t") }
@@ -80,6 +75,17 @@ class TerminalFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
+                binding.keyStart.isEnabled = state.linuxReady && !state.sessionActive
+                binding.keyStop.isEnabled = state.sessionActive
+                binding.linuxProgress.visibility =
+                    if (state.initializingLinux) View.VISIBLE else View.GONE
+                binding.linuxProgress.progress = state.initializationProgress
+                binding.linuxStatus.text = when {
+                    state.initializingLinux ->
+                        "Préparation de Kali ${state.initializationProgress}%"
+                    state.linuxReady -> "Kali prêt"
+                    else -> "Kali indisponible"
+                }
                 state.errorMessage?.let { msg ->
                     Components.showSnackLong(binding.root, msg)
                     viewModel.clearError()

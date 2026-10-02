@@ -44,18 +44,18 @@
     <style name="VoidButton" parent="Widget.Material3.Button">
         <item name="backgroundTint">@color/void_accent</item>
         <item name="android:textColor">@color/void_background</item>
-        <item name="cornerRadius">8dp</item>
+        <item name="cornerRadius">12dp</item>
     </style>
 
     <style name="VoidButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
         <item name="strokeColor">@color/void_accent</item>
         <item name="android:textColor">@color/void_accent</item>
-        <item name="cornerRadius">8dp</item>
+        <item name="cornerRadius">12dp</item>
     </style>
 
     <style name="VoidCard" parent="Widget.Material3.CardView.Filled">
         <item name="cardBackgroundColor">@color/void_surface</item>
-        <item name="cardCornerRadius">12dp</item>
+        <item name="cardCornerRadius">16dp</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeColor">@color/void_divider</item>
         <item name="strokeWidth">1dp</item>
