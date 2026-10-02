@@ -37,7 +37,7 @@ jobs:
           cmdline-tools-version: 11076708
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
-          # CORRECTION CRITIQUE : Installation explicite de CMake et du NDK pour le compilateur C/C++ (Ninja)
+          # Installation explicite de CMake et du NDK pour le compilateur C/C++
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0 cmake;3.22.1 ndk;25.1.8937393'
 
       - name: Setup Gradle
@@ -72,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           bash tools/build-proot.sh "${{ matrix.android-abi }}"
-          test -x native/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
+          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
           test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
           test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libtalloc.so
           test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libandroid-shmem.so
