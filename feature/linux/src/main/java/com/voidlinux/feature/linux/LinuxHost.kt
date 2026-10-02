@@ -33,12 +33,9 @@ class LinuxHost(private val context: Context) {
         get() = context.packageName
 
     private fun File.ensureDir(): File {
-        if (exists()) {
-            require(isDirectory) { "Le chemin ${absolutePath} existe mais n'est pas un répertoire" }
-            return this
-        }
-        require(mkdirs() || isDirectory) {
-            "Impossible de créer le répertoire privé ${absolutePath}"
+        if (isDirectory) return this
+        if (exists() || !mkdirs() || !isDirectory) {
+            throw IllegalStateException("Impossible de préparer le répertoire privé: $absolutePath")
         }
         return this
     }
