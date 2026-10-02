@@ -20,7 +20,8 @@ class PermissionManager(private val context: Context) {
     data class PermissionStatus(
         val name: String,
         val granted: Boolean,
-        val critical: Boolean
+        val critical: Boolean,
+        val runtime: Boolean = true
     )
 
     fun check(permission: String): Boolean =
@@ -47,9 +48,10 @@ class PermissionManager(private val context: Context) {
             critical = false
         ),
         PermissionStatus(
-            name = "Stockage privé de l'application",
+            name = "Stockage privé de l'application (aucune permission requise)",
             granted = true,
-            critical = true
+            critical = true,
+            runtime = false
         )
     )
 
