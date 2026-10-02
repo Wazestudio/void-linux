@@ -16,7 +16,9 @@ import java.io.FileOutputStream
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 import kotlin.math.max
 
@@ -39,17 +41,28 @@ class LinuxInstaller(
 
         try {
             host.tmpDir.mkdirs()
+            var bundledRootfs = false
             if (!archive.isFile || archive.length() == 0L) {
-                if (!copyBundledRootfsIfAvailable(distro, partialArchive)) {
-                    downloadFile(distro.url, partialArchive) { progress ->
-                    notifier.update(distro.displayName, progress / 2)
-                    onProgress(progress / 2)
+                if (!partialArchive.isFile || partialArchive.length() == 0L) {
+                    bundledRootfs = copyBundledRootfsIfAvailable(distro, partialArchive)
+                }
+                if (bundledRootfs && !partialArchive.renameTo(archive)) {
+                    throw IOException("Impossible de préparer le rootfs intégré")
+                }
+            }
+
+            if (!bundledRootfs) {
+                val expectedSha256 = fetchExpectedSha256(distro.url)
+                if (!archive.isFile || sha256(archive) != expectedSha256) {
+                    archive.delete()
+                    downloadAndVerify(distro, expectedSha256, partialArchive) { progress ->
+                        val overall = progress / 2
+                        notifier.update(distro.displayName, overall)
+                        onProgress(overall)
                     }
                     if (!partialArchive.renameTo(archive)) {
                         throw IOException("Impossible de finaliser le téléchargement")
                     }
-                } else if (!partialArchive.renameTo(archive)) {
-                    throw IOException("Impossible de préparer le rootfs intégré")
                 }
             }
 
@@ -84,8 +97,6 @@ class LinuxInstaller(
             VoidResult.Success(targetDir)
         } catch (e: Exception) {
             stagingDir.deleteRecursively()
-            partialArchive.delete()
-            archive.delete()
             notifier.showError(distro.displayName, e.message ?: "Erreur inconnue")
             VoidResult.Error("Échec de l'installation Kali", e)
         }
@@ -104,9 +115,54 @@ class LinuxInstaller(
                 }
             }
             target.isFile && target.length() > 0L
-        } catch (_: Exception) {
+        } catch (_: IOException) {
+            target.delete()
             false
         }
+    }
+
+    private fun fetchExpectedSha256(url: String): String {
+        val archiveName = URL(url).path.substringAfterLast('/')
+        val checksumUrl = URL(URL(url), "SHA256SUMS").toString()
+        val connection = openHttpsConnection(checksumUrl)
+        try {
+            if (connection.responseCode !in 200..299) {
+                throw IOException("Téléchargement des sommes de contrôle refusé : HTTP ${connection.responseCode}")
+            }
+            val sums = connection.inputStream.bufferedReader(Charsets.US_ASCII).use { it.readText() }
+            val checksumLine = sums.lineSequence().firstOrNull { line ->
+                val fields = line.trim().split(Regex("\\s+"), limit = 2)
+                fields.size == 2 &&
+                    fields[0].matches(Regex("[0-9a-fA-F]{64}")) &&
+                    fields[1].removePrefix("*").substringAfterLast('/') == archiveName
+            } ?: throw IOException("Somme SHA-256 introuvable pour $archiveName")
+            return checksumLine.trim().split(Regex("\\s+"), limit = 2)[0].lowercase()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun downloadAndVerify(
+        distro: DistroCatalog.Distro,
+        expectedSha256: String,
+        target: File,
+        onProgress: (Int) -> Unit
+    ) {
+        var lastError: IOException? = null
+        repeat(MAX_DOWNLOAD_ATTEMPTS) { attempt ->
+            try {
+                downloadFile(distro.url, target, onProgress)
+                if (sha256(target) == expectedSha256) return
+                target.delete()
+                lastError = IOException("La somme SHA-256 du rootfs téléchargé ne correspond pas")
+            } catch (e: IOException) {
+                lastError = e
+            }
+            if (attempt < MAX_DOWNLOAD_ATTEMPTS - 1) {
+                Thread.sleep(RETRY_DELAY_MS * (attempt + 1))
+            }
+        }
+        throw IOException("Échec du téléchargement vérifié du rootfs Kali", lastError)
     }
 
     private fun downloadFile(
@@ -114,51 +170,127 @@ class LinuxInstaller(
         target: File,
         onProgress: (Int) -> Unit
     ) {
-        require(url.startsWith("https://")) { "Le téléchargement du rootfs doit utiliser HTTPS" }
-        val connection = (URL(url).openConnection() as HttpsURLConnection).apply {
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            instanceFollowRedirects = true
-        }
-
+        var downloaded = target.length().coerceAtLeast(0L)
+        val connection = openHttpsConnection(url, downloaded.takeIf { it > 0L })
         try {
-            connection.connect()
-            if (connection.url.protocol != "https") {
-                throw IOException("Le serveur a tenté un téléchargement non sécurisé")
+            val responseCode = connection.responseCode
+            if (responseCode == HTTP_RANGE_NOT_SATISFIABLE) {
+                target.delete()
+                throw IOException("Le serveur a refusé la reprise du téléchargement")
             }
-            if (connection.responseCode !in 200..299) {
-                throw IOException("Téléchargement refusé : HTTP ${connection.responseCode}")
+            if (responseCode !in 200..299) {
+                throw IOException("Téléchargement refusé : HTTP $responseCode")
             }
-            val total = connection.contentLengthLong
-            val requiredSpace = if (total in 1L..(Long.MAX_VALUE / 8)) {
-                total * 8
+
+            val append = responseCode == HttpURLConnection.HTTP_PARTIAL && downloaded > 0L
+            if (responseCode == HttpURLConnection.HTTP_PARTIAL && !append) {
+                throw IOException("Réponse de reprise inattendue du serveur")
+            }
+            if (downloaded > 0L && !append) downloaded = 0L
+            val contentRange = if (append) {
+                CONTENT_RANGE_REGEX.matchEntire(
+                    connection.getHeaderField("Content-Range").orEmpty()
+                )
             } else {
-                Long.MAX_VALUE
+                null
+            }
+            if (append) {
+                val rangeStart = contentRange?.groupValues?.get(1)?.toLongOrNull()
+                val rangeEnd = contentRange?.groupValues?.get(2)?.toLongOrNull()
+                val rangeLength = contentRange?.groupValues?.get(3)?.toLongOrNull()
+                val validRange = rangeStart != null && rangeEnd != null &&
+                    rangeLength != null && rangeStart == downloaded &&
+                    rangeEnd >= rangeStart && rangeLength > rangeEnd
+                if (!validRange) {
+                    target.delete()
+                    throw IOException("Réponse de reprise invalide : Content-Range incohérent")
+                }
+            }
+            val rangeTotal = contentRange?.groupValues?.get(3)?.toLongOrNull()
+            val total = rangeTotal ?: connection.contentLengthLong
+            if (total > 0L) {
+                onProgress(((downloaded * 100) / total).toInt().coerceIn(0, 100))
             }
             val availableSpace = android.os.StatFs(context.filesDir.absolutePath).availableBytes
-            if (availableSpace < requiredSpace) {
-                throw IOException("Espace insuffisant : prévois environ 8 fois la taille de l'archive")
+            if (total > 0L &&
+                availableSpace < total - downloaded + CountingInputStream.MINIMUM_FREE_SPACE_BYTES
+            ) {
+                throw IOException("Espace insuffisant pour télécharger le rootfs et extraire Kali")
             }
 
-            var downloaded = 0L
             connection.inputStream.use { input ->
-                FileOutputStream(target).use { output ->
+                FileOutputStream(target, append).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
                         output.write(buffer, 0, count)
                         downloaded += count
-                        if (total > 0) onProgress(((downloaded * 100) / total).toInt())
+                        if (total > 0L) {
+                            onProgress(((downloaded * 100) / total).toInt().coerceIn(0, 100))
+                        }
                     }
                 }
             }
-            if (downloaded == 0L || (total > 0 && downloaded != total)) {
+            if (downloaded == 0L || (total > 0L && downloaded != total)) {
                 throw IOException("Téléchargement incomplet du rootfs Kali")
             }
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun openHttpsConnection(
+        url: String,
+        rangeStart: Long? = null
+    ): HttpsURLConnection {
+        var currentUrl = URL(url)
+        if (currentUrl.protocol != "https") {
+            throw IOException("Le téléchargement du rootfs doit utiliser HTTPS")
+        }
+
+        repeat(MAX_REDIRECTS + 1) {
+            val connection = (currentUrl.openConnection() as? HttpsURLConnection
+                ?: throw IOException("Connexion HTTPS indisponible")).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                useCaches = false
+                setRequestProperty("Accept-Encoding", "identity")
+                if (rangeStart != null) setRequestProperty("Range", "bytes=$rangeStart-")
+                connect()
+            }
+            when (connection.responseCode) {
+                HttpURLConnection.HTTP_MOVED_PERM,
+                HttpURLConnection.HTTP_MOVED_TEMP,
+                HTTP_TEMPORARY_REDIRECT,
+                HTTP_PERMANENT_REDIRECT -> {
+                    val location = connection.getHeaderField("Location")
+                        ?: throw IOException("Redirection sans destination depuis Kali")
+                    val redirectUrl = URL(currentUrl, location)
+                    connection.disconnect()
+                    if (redirectUrl.protocol != "https") {
+                        throw IOException("Le serveur a tenté un téléchargement non sécurisé")
+                    }
+                    currentUrl = redirectUrl
+                }
+                else -> return connection
+            }
+        }
+        throw IOException("Trop de redirections pendant le téléchargement Kali")
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun extractRootfs(
@@ -294,7 +426,7 @@ class LinuxInstaller(
         }
         safePath = segments.filterNot { it == "." }.joinToString("/")
         val rootPath = root.canonicalFile.toPath()
-        val resolved = root.toPath().resolve(safePath).normalize()
+        val resolved = rootPath.resolve(safePath).normalize()
         if (!resolved.startsWith(rootPath)) {
             throw IOException("Chemin hors du rootfs dans l'archive")
         }
@@ -342,6 +474,18 @@ exec /bin/bash --noprofile --norc -i
     fun uninstall(distro: String): Boolean =
         host.rootfsFor(distro).deleteRecursively()
 
+    private companion object {
+        const val CONNECT_TIMEOUT_MS = 30_000
+        const val READ_TIMEOUT_MS = 60_000
+        const val MAX_DOWNLOAD_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 1_000L
+        const val MAX_REDIRECTS = 5
+        const val HTTP_RANGE_NOT_SATISFIABLE = 416
+        const val HTTP_TEMPORARY_REDIRECT = 307
+        const val HTTP_PERMANENT_REDIRECT = 308
+        val CONTENT_RANGE_REGEX = Regex("bytes (\\d+)-(\\d+)/(\\d+)")
+    }
+
     private class CountingInputStream(input: InputStream) : FilterInputStream(input) {
         var bytesRead = 0L
             private set
@@ -358,7 +502,7 @@ exec /bin/bash --noprofile --norc -i
 
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
             val count = super.read(buffer, offset, length)
-            if (count > 0)             bytesRead += count
+            if (count > 0) bytesRead += count
             return count
         }
     }
