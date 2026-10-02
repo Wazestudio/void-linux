@@ -22,6 +22,7 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
 PACKAGES_INDEX="$WORK_DIR/Packages"
+echo "Fetching official Termux package index for $TERMUX_ARCH..." >&2
 curl --fail --location --retry 5 --retry-delay 3 --connect-timeout 30 \
     -o "$PACKAGES_INDEX" \
     "$TERMUX_APT_BASE/dists/stable/main/binary-$TERMUX_ARCH/Packages"
@@ -37,7 +38,7 @@ find_package_metadata() {
                 if ($i ~ /^Filename: /) { sub(/^Filename: /, "", $i); filename=$i }
                 if ($i ~ /^SHA256: /) { sub(/^SHA256: /, "", $i); sha256=$i }
             }
-            if (arch == "'"$TERMUX_ARCH"'" && filename != "" && sha256 != "") {
+            if ((arch == "'"$TERMUX_ARCH"'" || arch == "all") && filename != "" && sha256 != "") {
                 print filename "\t" sha256
                 exit
             }
@@ -55,7 +56,10 @@ download_package() {
     fi
     IFS=$'\t' read -r filename sha256 <<< "$metadata"
     local archive="$WORK_DIR/$(basename "$filename")"
-    echo "Downloading official Termux package: $package ($TERMUX_ARCH)"
+    
+    # CORRECTION CRITIQUE : Redirection du log vers >&2 pour préserver stdout clean
+    echo "Downloading official Termux package: $package ($TERMUX_ARCH)" >&2
+    
     curl --fail --location --retry 5 --retry-delay 3 --connect-timeout 30 \
         -o "$archive" "$TERMUX_APT_BASE/$filename"
     actual="$(sha256sum "$archive" | awk '{print $1}')"
@@ -66,6 +70,7 @@ download_package() {
     printf '%s\n' "$archive"
 }
 
+# Collecte stricte des chemins des paquets téléchargés
 for package in proot libtalloc libandroid-shmem; do
     download_package "$package"
 done > "$WORK_DIR/downloaded.txt"
@@ -73,20 +78,24 @@ done > "$WORK_DIR/downloaded.txt"
 STAGE_DIR="$WORK_DIR/stage"
 mkdir -p "$STAGE_DIR"
 while IFS= read -r deb; do
-    dpkg-deb -x "$deb" "$STAGE_DIR"
+    if [[ -f "$deb" ]]; then
+        dpkg-deb -x "$deb" "$STAGE_DIR"
+    fi
 done < "$WORK_DIR/downloaded.txt"
 
 TERMUX_PREFIX="$STAGE_DIR/data/data/com.termux/files/usr"
 PROOT_BINARY="$TERMUX_PREFIX/bin/proot"
-PROOT_LOADER="$TERMUX_PREFIX/libexec/proot/loader"
+
+# Tolérance structurelle : le chargeur peut s'appeler 'loader' ou 'libproot-loader.so'
+PROOT_LOADER="$(find "$TERMUX_PREFIX/libexec/proot" -type f \( -name 'loader' -o -name 'libproot-loader.so' \) -print -quit)"
 TALLOC_LIBRARY="$(find "$TERMUX_PREFIX/lib" -type f -name 'libtalloc.so.*' -print -quit)"
 SHMEM_LIBRARY="$(find "$TERMUX_PREFIX/lib" -type f -name 'libandroid-shmem.so*' -print -quit)"
 
 for required in "$PROOT_BINARY" "$PROOT_LOADER" "$TALLOC_LIBRARY" "$SHMEM_LIBRARY"; do
-    [[ -f "$required" ]] || {
-        echo "Required file missing from Termux packages: $required" >&2
+    if [[ -z "$required" || ! -f "$required" ]]; then
+        echo "Required file missing or empty from Termux packages structure." >&2
         exit 1
-    }
+    fi
 done
 
 rm -f "$OUTPUT_DIR"/libproot.so "$OUTPUT_DIR"/libproot_loader.so \
@@ -117,7 +126,6 @@ for library in libtalloc.so libandroid-shmem.so; do
     }
 done
 
-# Fail early if the produced ELF class does not match the requested Android ABI.
 case "$ANDROID_ABI" in
     arm64-v8a)
         file "$OUTPUT_DIR/libproot.so" | grep -Eq 'ELF 64-bit.*ARM aarch64' || {
