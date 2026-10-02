@@ -21,8 +21,6 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.nio.file.Files
-import java.nio.file.LinkOption
 import java.security.MessageDigest
 import javax.net.ssl.HttpsURLConnection
 import kotlin.math.max
@@ -82,22 +80,19 @@ class LinuxInstaller(
 
                 stagingDir.deleteRecursively()
                 if (!stagingDir.mkdirs() && !stagingDir.isDirectory) {
-                    throw IOException("Impossible de créer le répertoire privé d'installation Kali")
+                    throw IOException("Impossible de créer le répertoire temporaire du rootfs")
                 }
-                Os.chmod(stagingDir.absolutePath, 0x1c0)
                 extractRootfs(archive, stagingDir) { progress ->
                     val overall = 50 + progress / 2
                     notifier.update(distro.displayName, overall)
                     onProgress(overall)
                 }
 
-                normalizeExtractedRootfs(stagingDir)
-                val validation = validateKaliRootfs(stagingDir)
-                if (!validation.first) {
-                    throw IOException(
-                        "L'archive téléchargée ne contient pas un rootfs Kali valide : ${validation.second}"
-                    )
-                }
+                // Certaines archives sont directement à la racine, d'autres peuvent
+                // contenir un unique dossier parent. Normaliser avant validation évite
+                // le faux "aucun shell" alors que le shell existe réellement.
+                normalizeRootfsLayout(stagingDir)
+                validateKaliRootfs(stagingDir)
 
                 if (backupDir.exists()) backupDir.deleteRecursively()
                 if (targetDir.exists() && !targetDir.renameTo(backupDir)) {
@@ -448,13 +443,9 @@ class LinuxInstaller(
                 }
                 parent = parent.parentFile
             }
-            val linkExists = Files.exists(link.toPath(), LinkOption.NOFOLLOW_LINKS)
-            if (linkExists) {
-                if (link.isDirectory && link.list()?.isNotEmpty() == true) {
+            if (link.exists()) {
+                if (!link.isDirectory || link.list()?.isNotEmpty() == true || !link.delete()) {
                     throw IOException("Collision de chemin de lien symbolique dans le rootfs")
-                }
-                if (!link.delete()) {
-                    throw IOException("Impossible de remplacer l'entrée du rootfs : ${link.absolutePath}")
                 }
             }
             link.parentFile?.mkdirs()
@@ -498,6 +489,85 @@ class LinuxInstaller(
             throw IOException("Chemin hors du rootfs dans l'archive")
         }
         return resolved.toFile()
+    }
+
+    private fun normalizeRootfsLayout(rootfs: File) {
+        if (looksLikeKaliRootfs(rootfs)) return
+
+        val children = rootfs.listFiles()?.filter { it.name != "." && it.name != ".." } ?: emptyList()
+        val candidate = children.singleOrNull { it.isDirectory && looksLikeKaliRootfs(it) }
+            ?: children.firstOrNull { it.isDirectory && looksLikeRootfs(it) }
+            ?: return
+
+        val candidateChildren = candidate.listFiles() ?: emptyArray()
+        for (child in candidateChildren) {
+            val destination = File(rootfs, child.name)
+            if (destination.exists() || java.nio.file.Files.isSymbolicLink(destination.toPath())) {
+                throw IOException("Collision pendant la normalisation du rootfs : ${child.name}")
+            }
+            if (!child.renameTo(destination)) {
+                throw IOException("Impossible de déplacer ${child.name} vers la racine du rootfs")
+            }
+        }
+        if (!candidate.delete()) {
+            throw IOException("Impossible de finaliser la structure du rootfs")
+        }
+    }
+
+    private fun looksLikeRootfs(rootfs: File): Boolean =
+        File(rootfs, "etc/os-release").isFile &&
+            shellCandidates(rootfs).any { it.isFile }
+
+    private fun looksLikeKaliRootfs(rootfs: File): Boolean {
+        val osRelease = File(rootfs, "etc/os-release")
+        if (!osRelease.isFile || shellCandidates(rootfs).none { it.isFile }) return false
+        val metadata = runCatching { osRelease.readText(Charsets.UTF_8) }.getOrDefault("")
+        val isKali = metadata.lineSequence().any { line ->
+            val normalized = line.trim()
+            normalized == "ID=kali" ||
+                normalized.startsWith("ID_LIKE=") && normalized.substringAfter('=').contains("kali", ignoreCase = true)
+        }
+        return isKali && aptCandidates(rootfs).any { it.isFile }
+    }
+
+    private fun shellCandidates(rootfs: File): List<File> = listOf(
+        File(rootfs, "bin/bash"),
+        File(rootfs, "usr/bin/bash"),
+        File(rootfs, "bin/sh"),
+        File(rootfs, "usr/bin/sh"),
+        File(rootfs, "bin/dash"),
+        File(rootfs, "usr/bin/dash")
+    )
+
+    private fun aptCandidates(rootfs: File): List<File> = listOf(
+        File(rootfs, "usr/bin/apt-get"),
+        File(rootfs, "usr/bin/apt"),
+        File(rootfs, "bin/apt-get"),
+        File(rootfs, "bin/apt")
+    )
+
+    private fun findUsableShell(rootfs: File): String =
+        shellCandidates(rootfs).firstOrNull { it.isFile }?.relativeTo(rootfs)?.let { "/${it.path}" }
+            ?: throw IOException("Aucun shell Linux utilisable trouvé dans le rootfs")
+
+    private fun validateKaliRootfs(rootfs: File) {
+        if (!File(rootfs, "etc/os-release").isFile) {
+            throw IOException("Rootfs invalide : /etc/os-release est absent")
+        }
+        val metadata = runCatching { File(rootfs, "etc/os-release").readText(Charsets.UTF_8) }
+            .getOrElse { throw IOException("Impossible de lire /etc/os-release", it) }
+        val isKali = metadata.lineSequence().any { line ->
+            val normalized = line.trim()
+            normalized == "ID=kali" ||
+                normalized.startsWith("ID_LIKE=") && normalized.substringAfter('=').contains("kali", ignoreCase = true)
+        }
+        if (!isKali) throw IOException("Le rootfs téléchargé n'est pas identifié comme Kali Linux")
+        if (shellCandidates(rootfs).none { it.isFile }) {
+            throw IOException("Aucun shell Linux utilisable trouvé dans le rootfs")
+        }
+        if (aptCandidates(rootfs).none { it.isFile }) {
+            throw IOException("APT/apt-get est absent du rootfs Kali")
+        }
     }
 
     private fun applyMode(file: File, mode: Int, isDirectory: Boolean = false) {
@@ -557,87 +627,21 @@ class LinuxInstaller(
     }
 
     private fun configureKaliLogin(rootfs: File) {
+        val shell = findUsableShell(rootfs)
         val login = File(rootfs, "usr/local/sbin/void-kali-login")
         login.parentFile?.mkdirs()
-        login.writeText("""#!/bin/bash
-exec /bin/bash --noprofile --norc -i
-""".trimIndent())
+        val command = if (shell.endsWith("/bash")) {
+            "exec $shell --noprofile --norc -i"
+        } else {
+            "exec $shell -i"
+        }
+        login.writeText("#!/bin/sh\n$command\n")
         Os.chmod(login.absolutePath, 0x1ed)
     }
 
     fun isInstalled(distro: String): Boolean {
         val dir = host.rootfsFor(distro)
-        if (distro != Constants.DISTRO_KALI) {
-            return File(dir, "bin/bash").isFile || File(dir, "usr/bin/bash").isFile
-        }
-        return validateKaliRootfs(dir).first
-    }
-
-    /**
-     * Some mirrors/archives can contain a single top-level directory.  The
-     * application expects the filesystem root itself in [stagingDir], so move
-     * that directory's contents up when it is unambiguous.
-     */
-    private fun normalizeExtractedRootfs(stagingDir: File) {
-        if (File(stagingDir, "etc/os-release").isFile ||
-            File(stagingDir, "bin/bash").isFile ||
-            File(stagingDir, "usr/bin/bash").isFile
-        ) return
-
-        val children = stagingDir.listFiles()?.filter { it.name != "." && it.name != ".." }
-            ?: return
-        if (children.size != 1 || !children[0].isDirectory) return
-
-        val nested = children[0]
-        val nestedMarkers = File(nested, "etc/os-release").isFile ||
-            File(nested, "bin/bash").isFile ||
-            File(nested, "usr/bin/bash").isFile
-        if (!nestedMarkers) return
-
-        nested.listFiles()?.forEach { child ->
-            val destination = File(stagingDir, child.name)
-            if (destination.exists() || java.nio.file.Files.exists(destination.toPath(), LinkOption.NOFOLLOW_LINKS)) {
-                throw IOException("Structure rootfs ambiguë : ${child.name}")
-            }
-            if (!child.renameTo(destination)) {
-                throw IOException("Impossible de normaliser le rootfs : ${child.name}")
-            }
-        }
-        if (!nested.delete()) {
-            throw IOException("Impossible de finaliser la normalisation du rootfs")
-        }
-    }
-
-    private fun validateKaliRootfs(rootfs: File): Pair<Boolean, String> {
-        if (!rootfs.isDirectory) return false to "répertoire rootfs absent"
-
-        val shell = sequenceOf(
-            File(rootfs, "bin/bash"),
-            File(rootfs, "usr/bin/bash"),
-            File(rootfs, "bin/sh"),
-            File(rootfs, "usr/bin/sh")
-        ).firstOrNull { it.isFile }
-            ?: return false to "aucun shell Linux trouvé"
-
-        val apt = sequenceOf(
-            File(rootfs, "usr/bin/apt-get"),
-            File(rootfs, "usr/bin/apt")
-        ).firstOrNull { it.isFile }
-            ?: return false to "apt/apt-get absent"
-
-        val osRelease = File(rootfs, "etc/os-release")
-        if (!osRelease.isFile) return false to "etc/os-release absent"
-
-        val release = runCatching { osRelease.readText(Charsets.UTF_8) }.getOrElse {
-            return false to "etc/os-release illisible"
-        }
-        val isKali = release.lineSequence().any { line ->
-            val value = line.substringAfter('=', "").trim().trim('\"', '\'')
-            line.startsWith("ID=") && value.equals("kali", ignoreCase = true)
-        }
-        if (!isKali) return false to "etc/os-release ne décrit pas Kali Linux"
-
-        return true to "shell=${shell.relativeTo(rootfs).path}, apt=${apt.relativeTo(rootfs).path}"
+        return dir.isDirectory && runCatching { validateKaliRootfs(dir); true }.getOrDefault(false)
     }
 
     fun uninstall(distro: String): Boolean =
