@@ -23,20 +23,6 @@ class TerminalSession(
     val isRunning: Boolean
         get() = linuxSession.isRunning()
 
-    /** Définit le routage de la prochaine session Linux. */
-    fun setNetworkRoute(route: String, proxyHost: String? = null, proxyPort: Int? = null) {
-        require(route in setOf(
-            Constants.NETWORK_ROUTE_DIRECT,
-            Constants.NETWORK_ROUTE_TOR,
-            Constants.NETWORK_ROUTE_SOCKS5
-        ))
-        val editor = context.getSharedPreferences("void_network", Context.MODE_PRIVATE).edit()
-            .putString(Constants.NETWORK_ROUTE_PREF, route)
-        if (proxyHost != null) editor.putString(Constants.NETWORK_PROXY_HOST_PREF, proxyHost)
-        if (proxyPort != null) editor.putInt(Constants.NETWORK_PROXY_PORT_PREF, proxyPort)
-        editor.apply()
-    }
-
     fun start() {
         linuxSession.resize(buffer.cols, buffer.rows)
         linuxSession.start()
