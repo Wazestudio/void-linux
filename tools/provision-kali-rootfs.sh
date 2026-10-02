@@ -39,11 +39,18 @@ cleanup() {
 trap cleanup EXIT
 
 sudo tar -xJf "$archive" -C "$rootfs"
-sudo mkdir -p "$rootfs/usr/bin"
+if [[ ! -x "$rootfs/bin/bash" ]]; then
+  echo "L'archive Kali n'a pas la structure attendue : /bin/bash est absent." >&2
+  exit 1
+fi
+sudo mkdir -p "$rootfs/usr/bin" "$rootfs/etc"
 sudo cp "$QEMU_PATH" "$rootfs/usr/bin/$QEMU_NAME"
 sudo rm -f "$rootfs/etc/resolv.conf"
-sudo mkdir -p "$rootfs/etc"
 sudo cp /etc/resolv.conf "$rootfs/etc/resolv.conf"
+if [[ ! -s "$rootfs/etc/resolv.conf" ]]; then
+  echo "Impossible de configurer le DNS dans le rootfs Kali." >&2
+  exit 1
+fi
 
 for directory in dev proc sys; do
   mkdir -p "$rootfs/$directory"
