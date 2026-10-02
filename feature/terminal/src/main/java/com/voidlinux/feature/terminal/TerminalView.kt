@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.text.InputType
 import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -12,12 +13,8 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
-import android.text.InputType
 import kotlin.math.ceil
 
-/**
- * Vue personnalisée qui rend le TerminalBuffer à l'écran.
- */
 class TerminalView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -30,7 +27,6 @@ class TerminalView @JvmOverloads constructor(
             parser = AnsiParser(value)
         }
 
-    // Le parseur garde l'état (couleurs, séquence ESC coupée en deux) entre deux lectures
     private var parser: AnsiParser = AnsiParser(buffer)
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -58,17 +54,18 @@ class TerminalView @JvmOverloads constructor(
     private var cursorVisible = true
     private var blinkRunnable: Runnable? = null
 
-    /** Callback pour envoyer un caractère tapé */
     var onInput: ((String) -> Unit)? = null
-
-    /** Callback pour signaler un redimensionnement */
     var onResize: ((cols: Int, rows: Int) -> Unit)? = null
 
     override fun onCheckIsTextEditor(): Boolean = true
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or
+                EditorInfo.IME_ACTION_NONE
+
         return object : BaseInputConnection(this, true) {
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
@@ -76,8 +73,6 @@ class TerminalView @JvmOverloads constructor(
             }
 
             override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                // Les terminaux n'utilisent pas de texte composé : on envoie
-                // directement la composition au PTY pour une saisie fluide.
                 if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
                 return true
             }
@@ -92,11 +87,13 @@ class TerminalView @JvmOverloads constructor(
             override fun sendKeyEvent(event: KeyEvent): Boolean {
                 if (event.action != KeyEvent.ACTION_DOWN) return true
                 val ansi = KeyboardHandler.keyCodeToAnsi(event.keyCode, event)
-                if (ansi != null) onInput?.invoke(ansi)
-                else {
+                if (ansi != null) {
+                    onInput?.invoke(ansi)
+                } else {
                     when (event.keyCode) {
                         KeyEvent.KEYCODE_ENTER -> onInput?.invoke("\r")
                         KeyEvent.KEYCODE_DEL -> onInput?.invoke("\u007F")
+                        KeyEvent.KEYCODE_SPACE -> onInput?.invoke(" ")
                     }
                 }
                 return true
@@ -139,31 +136,22 @@ class TerminalView @JvmOverloads constructor(
         for (r in 0 until buffer.rows) {
             for (c in 0 until buffer.cols) {
                 val cell = buffer.getCell(r, c) ?: continue
-
                 val x = c * cellWidth
                 val y = r * cellHeight
 
-                // Fond
                 if (cell.bg != Color.BLACK || cell.reverse) {
                     bgPaint.color = if (cell.reverse) cell.fg else cell.bg
                     canvas.drawRect(x, y, x + cellWidth, y + cellHeight, bgPaint)
                 }
 
-                // Caractère
                 if (cell.char != ' ') {
                     val paint = if (cell.bold) boldPaint else textPaint
                     paint.color = if (cell.reverse) cell.bg else cell.fg
-                    canvas.drawText(
-                        cell.char.toString(),
-                        x,
-                        y + baselineOffset,
-                        paint
-                    )
+                    canvas.drawText(cell.char.toString(), x, y + baselineOffset, paint)
                 }
             }
         }
 
-        // Curseur
         if (cursorVisible && isFocused) {
             val cx = buffer.cursorCol * cellWidth
             val cy = buffer.cursorRow * cellHeight
@@ -171,13 +159,11 @@ class TerminalView @JvmOverloads constructor(
         }
     }
 
-    /** Écrit du texte dans le buffer */
     fun writeText(text: String) {
         parser.feed(text)
         postInvalidate()
     }
 
-    /** Envoie une touche clavier au processus */
     fun sendInput(data: String) {
         onInput?.invoke(data)
     }
@@ -201,6 +187,9 @@ class TerminalView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_DOWN) {
             requestFocus()
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE)
+                as? android.view.inputmethod.InputMethodManager
+            imm?.showSoftInput(this, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
             return true
         }
         return super.onTouchEvent(event)
