@@ -22,7 +22,7 @@ class LinuxHost(private val context: Context) {
     }
 
     val tmpDir: File by lazy {
-        File(context.cacheDir, Constants.DIR_TMP).ensureDir()
+        File(context.filesDir, Constants.DIR_TMP).ensureDir()
     }
 
     val nativeLibsDir: File by lazy {
@@ -33,9 +33,8 @@ class LinuxHost(private val context: Context) {
         get() = context.packageName
 
     private fun File.ensureDir(): File {
-        if (isDirectory) return this
-        if (exists() || !mkdirs() || !isDirectory) {
-            throw IllegalStateException("Impossible de préparer le répertoire privé: $absolutePath")
+        if (!exists() && !mkdirs() && !isDirectory) {
+            throw IllegalStateException("Impossible de créer ${absolutePath}")
         }
         return this
     }
