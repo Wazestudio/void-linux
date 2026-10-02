@@ -6,7 +6,6 @@ import com.voidlinux.core.native.NativeBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -20,7 +19,6 @@ class LinuxSession(
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var sessionJob: Job? = null
     private val host = LinuxHost(context)
     private var masterFd = -1
     private var processId = -1
@@ -43,20 +41,19 @@ class LinuxSession(
             "libtalloc.so",
             "libandroid-shmem.so"
         ).firstOrNull { !File(nativeLibraries, it).isFile }
-        val shell = distro?.defaultShell ?: "/bin/bash"
         val loginShell = if (distroId == Constants.DISTRO_KALI) {
             "/usr/local/sbin/void-kali-login"
         } else {
-            shell
+            distro?.defaultShell ?: "/bin/sh"
         }
         if (distro == null || !rootfs.isDirectory ||
-            !File(rootfs, shell.removePrefix("/")).isFile || !proot.isFile ||
+            !File(rootfs, loginShell.removePrefix("/")).isFile || !proot.isFile ||
             missingRuntimeLibrary != null
         ) {
             val message = when {
                 distro == null -> "Distribution non prise en charge : $distroId"
                 !rootfs.isDirectory -> "Kali n'est pas installé"
-                !File(rootfs, shell.removePrefix("/")).isFile -> "Shell Kali introuvable : $shell"
+                !File(rootfs, loginShell.removePrefix("/")).isFile -> "Entrée shell Kali introuvable : $loginShell"
                 !proot.isFile -> "Binaire PRoot Android manquant dans l'APK"
                 else -> "Bibliothèque PRoot absente de l'APK : $missingRuntimeLibrary"
             }
@@ -110,7 +107,7 @@ class LinuxSession(
             val slave = pty[1]
             createdMaster = master
             createdSlave = slave
-            val prootTemp = File(context.cacheDir, "proot-tmp").apply {
+            val prootTemp = File(host.tmpDir, "proot-tmp").apply {
                 if (!exists() && !mkdirs()) throw IllegalStateException("Impossible de créer le répertoire temporaire PRoot")
                 setReadable(true, true)
                 setWritable(true, true)
@@ -147,7 +144,7 @@ class LinuxSession(
             running = true
             onOutput("Kali Linux démarré (PRoot, sans privilèges root Android).\r\n")
 
-            sessionJob = scope.launch {
+            scope.launch {
                 while (true) {
                     val bytes = NativeBridge.readFromPty(master, 4096) ?: break
                     onOutput(String(bytes, StandardCharsets.UTF_8))
@@ -163,7 +160,6 @@ class LinuxSession(
                     if (exitCode != 0) onError("Le processus Linux s'est arrêté (code $exitCode)")
                     onExit(exitCode)
                 }
-                sessionJob = null
             }
         } catch (e: Exception) {
             if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
@@ -216,8 +212,6 @@ class LinuxSession(
         stopping = true
         running = false
         if (processId > 0) NativeBridge.killProcess(processId)
-        sessionJob?.cancel()
-        sessionJob = null
     }
 
     @Synchronized
