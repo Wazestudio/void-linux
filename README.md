@@ -49,6 +49,29 @@ vérifications encore nécessaires.
 
 ---
 
+## 🔐 Tor via Orbot
+
+Void-Linux utilise **Orbot** pour faire passer ton trafic par le réseau Tor.
+
+### Installation
+
+1. Ouvre l'onglet **Tor** dans Void-Linux.
+2. Clique sur **Installer Orbot** → tu es redirigé vers F-Droid.
+3. Installe Orbot, puis reviens dans Void-Linux.
+
+### Activation
+
+1. Clique sur **Activer Tor** → Orbot s'ouvre automatiquement.
+2. Dans Orbot, clique sur **Démarrer** et attends que le bootstrap atteigne 100% (20 à 40 secondes).
+3. Reviens dans Void-Linux et clique sur **J'ai activé Tor dans Orbot**.
+4. Le statut passe à **Tor actif ✅**.
+5. Le bouton **Navigateur .onion** devient disponible.
+
+### Proxy SOCKS
+
+Une fois Tor actif, le proxy SOCKS est disponible sur :
+
+
 ## ✨ Fonctionnalités
 
 ### 🐉 Environnement Linux
