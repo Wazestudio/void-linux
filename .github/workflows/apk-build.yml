@@ -11,67 +11,261 @@ jobs:
     name: Build APK (${{ matrix.android-abi }})
     runs-on: ubuntu-latest
     environment: release-signing
+
     strategy:
       fail-fast: false
       matrix:
         include:
           - android-abi: arm64-v8a
           - android-abi: armeabi-v7a
+
     steps:
+
+      # =========================================================
+      # CHECKOUT
+      # =========================================================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
 
+      # =========================================================
+      # JAVA
+      # =========================================================
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
+      # =========================================================
+      # ANDROID SDK
+      # =========================================================
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: 11076708
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0 cmake;3.22.1 ndk;25.1.8937393'
+          packages: >-
+            platform-tools
+            platforms;android-34
+            build-tools;34.0.0
+            cmake;3.22.1
+            ndk;25.1.8937393
 
+      # =========================================================
+      # GRADLE
+      # =========================================================
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
 
+      # =========================================================
+      # CMAKE CACHE
+      # =========================================================
       - name: Cache CMake build
         uses: actions/cache@v4
         with:
-          path: core/native/.cxx
-          key: cmake-${{ runner.os }}-${{ matrix.android-abi }}-${{ hashFiles('core/native/src/main/cpp/**/*.c', 'core/native/src/main/cpp/**/*.cpp', 'core/native/CMakeLists.txt') }}
+          path: |
+            core/native/.cxx
+            native/.cxx
+          key: cmake-${{ runner.os }}-${{ matrix.android-abi }}-${{ hashFiles('core/native/src/main/cpp/**/*.c', 'core/native/src/main/cpp/**/*.cpp', 'core/native/CMakeLists.txt', 'native/**/*.c', 'native/**/*.cpp', 'native/CMakeLists.txt') }}
           restore-keys: |
             cmake-${{ runner.os }}-${{ matrix.android-abi }}-
 
+      # =========================================================
+      # ICONS
+      # =========================================================
       - name: Generate mipmap icons
         run: |
+          set -euo pipefail
+
           if [ -f tools/generate-mipmaps.sh ]; then
             bash tools/generate-mipmaps.sh
           else
-            echo "::warning::Pas de script generate-mipmaps.sh — skip"
+            echo "::warning::generate-mipmaps.sh absent — skip"
           fi
 
+      # =========================================================
+      # PACKAGING TOOLS
+      # =========================================================
       - name: Install PRoot packaging tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends patchelf dpkg curl
+          set -euo pipefail
 
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            patchelf \
+            dpkg \
+            curl \
+            file \
+            unzip \
+            libxml2-utils
+
+      # =========================================================
+      # RESOURCE PRECHECK
+      # =========================================================
+      - name: Validate Android XML resources
+        run: |
+          set -euo pipefail
+
+          echo "=== Vérification des ressources XML ==="
+
+          xml_errors=0
+
+          while IFS= read -r -d '' file; do
+            if ! xmllint --noout "$file" >/dev/null 2>&1; then
+              echo "::error::XML invalide : $file"
+              xmllint --noout "$file" || true
+              xml_errors=1
+            fi
+          done < <(find . \
+            -type f \
+            \( -path '*/src/main/res/values/*.xml' \
+            -o -path '*/src/main/res/values-*/*.xml' \) \
+            -print0)
+
+          if [ "$xml_errors" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Tous les XML sont valides."
+
+      # =========================================================
+      # AAPT2 RESOURCE SANITIZATION
+      # =========================================================
+      - name: Sanitize Android values resources
+        run: |
+          set -euo pipefail
+
+          echo "=== Nettoyage préventif des ressources values ==="
+
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path("app/src/main/res"),
+              Path("core"),
+              Path("feature"),
+          ]
+
+          files = []
+
+          for root in roots:
+              if not root.exists():
+                  continue
+
+              for path in root.rglob("*.xml"):
+                  if "/res/values" in str(path):
+                      files.append(path)
+
+          changed = []
+
+          for path in files:
+              try:
+                  original = path.read_text(encoding="utf-8-sig")
+              except UnicodeDecodeError:
+                  continue
+
+              content = original
+
+              # Android XML resources do not need backslash escaping
+              # for apostrophes.
+              content = content.replace("\\'", "’")
+
+              # Normalize XML apostrophe entity which has previously
+              # triggered AAPT2 extraction failures in this project.
+              content = content.replace("&apos;", "’")
+
+              # Remove accidental control characters that XML parsers
+              # accept inconsistently.
+              content = re.sub(
+                  r"[\x00-\x08\x0B\x0C\x0E-\x1F]",
+                  "",
+                  content
+              )
+
+              if content != original:
+                  path.write_text(content, encoding="utf-8")
+                  changed.append(str(path))
+
+          if changed:
+              print("Ressources normalisées :")
+              for item in changed:
+                  print(" -", item)
+          else:
+              print("Aucune modification nécessaire.")
+          PY
+
+      # =========================================================
+      # RECHECK XML AFTER SANITIZATION
+      # =========================================================
+      - name: Revalidate Android XML resources
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r -d '' file; do
+            xmllint --noout "$file"
+          done < <(find . \
+            -type f \
+            \( -path '*/src/main/res/values/*.xml' \
+            -o -path '*/src/main/res/values-*/*.xml' \) \
+            -print0)
+
+          echo "Validation XML finale OK."
+
+      # =========================================================
+      # PROOT
+      # =========================================================
       - name: Prepare official Termux PRoot runtime (${{ matrix.android-abi }})
         run: |
           set -euo pipefail
-          bash tools/build-proot.sh "${{ matrix.android-abi }}"
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libtalloc.so
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libandroid-shmem.so
+
+          ABI="${{ matrix.android-abi }}"
+
+          echo "Construction du runtime PRoot pour $ABI..."
+
+          bash tools/build-proot.sh "$ABI"
+
+          SOURCE_DIR="native/src/main/jniLibs/$ABI"
+          TARGET_DIR="app/src/main/jniLibs/$ABI"
+
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "::error::Le runtime PRoot n'a pas été généré dans $SOURCE_DIR"
+            exit 1
+          fi
+
+          mkdir -p "$TARGET_DIR"
+
+          # Le script build-proot.sh produit les bibliothèques
+          # dans native/src/main/jniLibs. L'application Android
+          # les attend dans app/src/main/jniLibs.
+          cp -f "$SOURCE_DIR"/*.so "$TARGET_DIR/"
+
+          echo "=== Bibliothèques PRoot ==="
+          ls -lah "$TARGET_DIR"
+
+          required=(
+            libproot.so
+            libproot_loader.so
+            libtalloc.so
+            libandroid-shmem.so
+          )
+
+          for lib in "${required[@]}"; do
+            if [ ! -f "$TARGET_DIR/$lib" ]; then
+              echo "::error::Bibliothèque manquante : $TARGET_DIR/$lib"
+              exit 1
+            fi
+
+            file "$TARGET_DIR/$lib"
+          done
+
+          echo "Runtime PRoot $ABI validé."
 
       # =========================================================
       # SIGNATURE RELEASE
@@ -84,69 +278,164 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Le secret GitHub $name est absent; impossible de signer l'APK release."
+
+          required_secrets=(
+            KEYSTORE_BASE64
+            ANDROID_KEYSTORE_PASSWORD
+            ANDROID_KEY_ALIAS
+            ANDROID_KEY_PASSWORD
+          )
+
+          for name in "${required_secrets[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Le secret GitHub $name est absent."
               exit 1
             fi
           done
 
-          keystore="$RUNNER_TEMP/void-linux-release.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
-          chmod 600 "$keystore"
-          keytool -list -keystore "$keystore" \
+          KEYSTORE="$RUNNER_TEMP/void-linux-release.jks"
+
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+
+          chmod 600 "$KEYSTORE"
+
+          if [ ! -s "$KEYSTORE" ]; then
+            echo "::error::Le keystore décodé est vide."
+            exit 1
+          fi
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+            -alias "$ANDROID_KEY_ALIAS" \
+            >/dev/null
 
           {
-            echo "RELEASE_STORE_FILE=$keystore"
+            echo "RELEASE_STORE_FILE=$KEYSTORE"
             echo "RELEASE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
             echo "RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
             echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
+          echo "Keystore release validé."
+
+      # =========================================================
+      # PROJECT STRUCTURE
+      # =========================================================
       - name: Validate Gradle project structure
         run: |
           set -euo pipefail
-          test -f settings.gradle.kts
-          test -f feature/linux/build.gradle.kts
-          test -f core/native/CMakeLists.txt
+
+          required_files=(
+            settings.gradle.kts
+            feature/linux/build.gradle.kts
+            core/native/CMakeLists.txt
+          )
+
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Fichier requis absent : $file"
+              exit 1
+            fi
+          done
+
           if grep -q 'library/proot-engin/proot-engine' settings.gradle.kts; then
-            echo "::error::Ancien module PRoot dupliqué détecté dans settings.gradle.kts"
+            echo "::error::Ancien module PRoot dupliqué détecté."
             exit 1
           fi
 
+          echo "Structure Gradle validée."
+
+      # =========================================================
+      # ABI VALIDATION
+      # =========================================================
       - name: Verify requested ABI
         run: |
           set -euo pipefail
-          case '${{ matrix.android-abi }}' in arm64-v8a|armeabi-v7a) ;; *) exit 1 ;; esac
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
-          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
 
+          ABI="${{ matrix.android-abi }}"
+
+          case "$ABI" in
+            arm64-v8a|armeabi-v7a)
+              ;;
+            *)
+              echo "::error::ABI non supportée : $ABI"
+              exit 1
+              ;;
+          esac
+
+          JNI_DIR="app/src/main/jniLibs/$ABI"
+
+          for lib in \
+            libproot.so \
+            libproot_loader.so \
+            libtalloc.so \
+            libandroid-shmem.so
+          do
+            test -f "$JNI_DIR/$lib" || {
+              echo "::error::Bibliothèque manquante : $JNI_DIR/$lib"
+              exit 1
+            }
+          done
+
+          echo "ABI $ABI correctement préparée."
+
+      # =========================================================
+      # CLEAN
+      # =========================================================
+      - name: Clean Gradle outputs
+        run: |
+          set -euo pipefail
+
+          gradle clean \
+            --no-daemon \
+            --stacktrace
+
+      # =========================================================
+      # BUILD
+      # =========================================================
       - name: Build APK (Release)
         run: |
-          gradle clean assembleRelease \
+          set -euo pipefail
+
+          gradle assembleRelease \
             -PtargetAbi="${{ matrix.android-abi }}" \
             -x lint \
             -x lintVitalRelease \
             --stacktrace \
             --no-daemon \
+            --max-workers=2 \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
-            -Pkotlin.compiler.execution.strategy="in-process"
+            -Pkotlin.compiler.execution.strategy=in-process
 
-      - name: Verify release APK signature (${{ matrix.android-abi }})
+      # =========================================================
+      # APK VALIDATION
+      # =========================================================
+      - name: Validate generated APK
         run: |
           set -euo pipefail
+
           shopt -s nullglob
+
           apks=(app/build/outputs/apk/release/*.apk)
+
           if [ "${#apks[@]}" -eq 0 ]; then
             echo "::error::Aucun APK release généré."
             exit 1
           fi
+
           for apk in "${apks[@]}"; do
-            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+            echo "APK : $apk"
+            ls -lh "$apk"
+
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify \
+              --verbose \
+              "$apk"
           done
 
+      # =========================================================
+      # UPLOAD
+      # =========================================================
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
