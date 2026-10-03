@@ -11,6 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+        maven { url = uri("https://raw.githubusercontent.com/guardianproject/gpmaven/master") }
     }
 }
 
@@ -20,8 +22,6 @@ include(":app")
 include(":core:common")
 include(":core:designsystem")
 include(":core:native")
-project(":core:native").projectDir = file("native")
-include(":core:data")
 include(":feature:linux")
 include(":feature:terminal")
 include(":feature:windows")
