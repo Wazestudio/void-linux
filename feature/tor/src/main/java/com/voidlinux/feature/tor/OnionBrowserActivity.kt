@@ -2,15 +2,22 @@ package com.voidlinux.feature.tor
 
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.text.InputType
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -18,11 +25,11 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import com.voidlinux.feature.tor.OnionDirectory.Category
 import com.voidlinux.feature.tor.OnionDirectory.OnionLink
+import java.io.File
 
 class OnionBrowserActivity : AppCompatActivity() {
 
@@ -44,9 +51,7 @@ class OnionBrowserActivity : AppCompatActivity() {
     private val unlockLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode != RESULT_OK) {
-            finish()
-        }
+        if (result.resultCode != RESULT_OK) finish()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -54,8 +59,6 @@ class OnionBrowserActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         browserLock = BrowserLock(this)
-
-        // Vérifie le verrouillage au démarrage
         if (browserLock.isLockEnabled()) {
             unlockLauncher.launch(Intent(this, LockActivity::class.java))
         }
@@ -76,7 +79,6 @@ class OnionBrowserActivity : AppCompatActivity() {
         setupButtons()
         setupTabs()
 
-        // Crée le premier onglet
         newTab("https://check.torproject.org")
     }
 
@@ -103,8 +105,7 @@ class OnionBrowserActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 url?.let { urlBar.setText(it) }
-                tabs[currentTabIndex].url = url ?: ""
-                updateTabTitle(url ?: "Nouvel onglet")
+                tabs.getOrNull(currentTabIndex)?.url = url ?: ""
             }
         }
 
@@ -117,6 +118,71 @@ class OnionBrowserActivity : AppCompatActivity() {
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 updateTabTitle(title ?: "Sans titre")
             }
+        }
+
+        // =========================================================
+        // GESTION DES TÉLÉCHARGEMENTS
+        // =========================================================
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            handleDownload(url, userAgent, contentDisposition, mimeType)
+        })
+    }
+
+    /**
+     * Télécharge un fichier vers Download/void-linux/ via DownloadManager.
+     */
+    private fun handleDownload(
+        url: String,
+        userAgent: String,
+        contentDisposition: String,
+        mimeType: String
+    ) {
+        try {
+            // Nom du fichier déduit de l'URL ou du Content-Disposition
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+
+            // Sous-dossier : Download/void-linux/
+            val subPath = "void-linux"
+
+            val request = DownloadManager.Request(Uri.parse(url))
+                .setTitle(fileName)
+                .setDescription("Téléchargement via Void-Linux")
+                .setNotificationVisibility(
+                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                )
+                .setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    "$subPath/$fileName"
+                )
+                .setMimeType(mimeType)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
+
+            // User-agent
+            if (userAgent.isNotEmpty()) {
+                request.addRequestHeader("User-Agent", userAgent)
+            }
+
+            // Cookies (utile pour les sites qui en ont besoin)
+            val cookies = CookieManager.getInstance().getCookie(url)
+            if (!cookies.isNullOrEmpty()) {
+                request.addRequestHeader("Cookie", cookies)
+            }
+
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
+
+            Toast.makeText(
+                this,
+                "Téléchargement démarré : $fileName\n→ Download/$subPath/",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Impossible de démarrer le téléchargement : ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -144,14 +210,7 @@ class OnionBrowserActivity : AppCompatActivity() {
                 switchToTab(tab.position)
             }
             override fun onTabUnselected(tab: TabLayout.Tab) {}
-            override fun onTabReselected(tab: TabLayout.Tab) {}
-        })
-
-        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {}
-            override fun onTabUnselected(tab: TabLayout.Tab) {}
             override fun onTabReselected(tab: TabLayout.Tab) {
-                // Ferme l'onglet au double-clic
                 closeTab(tab.position)
             }
         })
@@ -204,7 +263,7 @@ class OnionBrowserActivity : AppCompatActivity() {
                     0 -> newTab()
                     1 -> newTabIncognito()
                     2 -> closeTab(currentTabIndex)
-                    3 -> showDownloads()
+                    3 -> openDownloadsFolder()
                     4 -> showHistory()
                     5 -> clearData()
                     6 -> showLockSettings()
@@ -221,8 +280,43 @@ class OnionBrowserActivity : AppCompatActivity() {
         switchToTab(tabs.size - 1)
     }
 
-    private fun showDownloads() {
-        Toast.makeText(this, "Téléchargements : fonctionnalité à venir", Toast.LENGTH_SHORT).show()
+    /**
+     * Ouvre le dossier Download/void-linux/ dans le gestionnaire de fichiers.
+     */
+    private fun openDownloadsFolder() {
+        try {
+            val downloadsDir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "void-linux"
+            )
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs()
+            }
+
+            // Intent pour ouvrir le dossier via le gestionnaire de fichiers
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(
+                    Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload%2Fvoid-linux"),
+                    "resource/folder"
+                )
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                // Fallback : ouvrir le dossier Download générique
+                val fallback = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(fallback)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Impossible d'ouvrir le dossier : ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun showHistory() {
@@ -233,6 +327,8 @@ class OnionBrowserActivity : AppCompatActivity() {
         webView.clearHistory()
         webView.clearCache(true)
         webView.clearFormData()
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
         Toast.makeText(this, "Données de navigation effacées", Toast.LENGTH_SHORT).show()
     }
 
@@ -288,7 +384,7 @@ class OnionBrowserActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Définir un schéma")
-            .setMessage("Dessine un schéma en reliant au moins 4 points. Entre la séquence de chiffres correspondante.")
+            .setMessage("Entre la séquence de chiffres du schéma (min 4 points).")
             .setView(input)
             .setPositiveButton("Valider") { _, _ ->
                 val pattern = input.text.toString()
@@ -311,7 +407,6 @@ class OnionBrowserActivity : AppCompatActivity() {
         )
 
         AlertDialog.Builder(this)
-            .setTitle("Paramètres")
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> toggleJavaScript()
@@ -342,9 +437,7 @@ class OnionBrowserActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Annuaire .onion")
-            .setItems(labels) { _, which ->
-                showCategory(categories[which])
-            }
+            .setItems(labels) { _, which -> showCategory(categories[which]) }
             .setNegativeButton("Annuler", null)
             .show()
     }
@@ -360,9 +453,7 @@ class OnionBrowserActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle(category.label)
-            .setItems(labels) { _, which ->
-                confirmNavigation(links[which])
-            }
+            .setItems(labels) { _, which -> confirmNavigation(links[which]) }
             .setNegativeButton("Retour", null)
             .show()
     }
