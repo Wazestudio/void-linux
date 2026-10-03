@@ -1,7 +1,6 @@
 name: Build Void-Linux APK
 
 on:
-  # Déclenchement UNIQUE et STRICTEMENT manuel depuis l'onglet Actions sur GitHub
   workflow_dispatch:
 
 permissions:
@@ -9,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK (${{ matrix.android-abi }})
     runs-on: ubuntu-latest
     environment: release-signing
     strategy:
@@ -44,12 +43,11 @@ jobs:
         with:
           gradle-version: 8.7
 
-      # Optimisation du cache pour CMake
       - name: Cache CMake build
         uses: actions/cache@v4
         with:
-          path: native/.cxx
-          key: cmake-${{ runner.os }}-${{ matrix.android-abi }}-${{ hashFiles('native/src/main/cpp/**/*.c', 'native/src/main/cpp/**/*.cpp', 'native/CMakeLists.txt') }}
+          path: core/native/.cxx
+          key: cmake-${{ runner.os }}-${{ matrix.android-abi }}-${{ hashFiles('core/native/src/main/cpp/**/*.c', 'core/native/src/main/cpp/**/*.cpp', 'core/native/CMakeLists.txt') }}
           restore-keys: |
             cmake-${{ runner.os }}-${{ matrix.android-abi }}-
 
@@ -61,7 +59,6 @@ jobs:
             echo "::warning::Pas de script generate-mipmaps.sh — skip"
           fi
 
-      # Outils nécessaires pour empaqueter et vérifier le runtime PRoot officiel
       - name: Install PRoot packaging tools
         run: |
           sudo apt-get update
@@ -71,11 +68,14 @@ jobs:
         run: |
           set -euo pipefail
           bash tools/build-proot.sh "${{ matrix.android-abi }}"
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libtalloc.so
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libandroid-shmem.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libtalloc.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libandroid-shmem.so
 
+      # =========================================================
+      # SIGNATURE RELEASE
+      # =========================================================
       - name: Configure Android release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -110,23 +110,18 @@ jobs:
           set -euo pipefail
           test -f settings.gradle.kts
           test -f feature/linux/build.gradle.kts
-          test -f native/CMakeLists.txt
+          test -f core/native/CMakeLists.txt
           if grep -q 'library/proot-engin/proot-engine' settings.gradle.kts; then
             echo "::error::Ancien module PRoot dupliqué détecté dans settings.gradle.kts"
             exit 1
           fi
-          if grep -q '^<\?xml' library/proot-engin/settings.gradle.kts 2>/dev/null; then
-            echo "::error::library/proot-engin/settings.gradle.kts contient du XML au lieu de Gradle"
-            exit 1
-          fi
 
-      # CORRECTION : Désactivation stricte de Lint lors de l'assemblage + arguments Kotlin robustes
       - name: Verify requested ABI
         run: |
           set -euo pipefail
           case '${{ matrix.android-abi }}' in arm64-v8a|armeabi-v7a) ;; *) exit 1 ;; esac
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
-          test -f native/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot.so
+          test -f app/src/main/jniLibs/${{ matrix.android-abi }}/libproot_loader.so
 
       - name: Build APK (Release)
         run: |
@@ -159,58 +154,3 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           retention-days: 7
           if-no-files-found: error
-
-  release:
-    name: Publish Release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Prepare release files
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          for artifact in artifacts/void-linux-release-*; do
-            abi="${artifact##*void-linux-release-}"
-            find "$artifact" -name "*.apk" -exec cp {} "release/void-linux-${abi}.apk" \;
-          done
-          if [ -z "$(ls -A release)" ]; then
-            echo "::error::Aucun APK trouvé pour la release !"
-            exit 1
-          fi
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Void-Linux ${{ github.ref_name }}
-          body: |
-            ## Void-Linux ${{ github.ref_name }}
-            Environnement Linux mobile pour l'apprentissage et le diagnostic de sécurité autorisé.
-
-            ### Contenu
-            - Terminal PRoot et moteur natif Android
-            - APK ARM64 et ARM 32 bits
-            - Rootfs Kali téléchargé et vérifié au premier lancement
-            - Collections d’outils de diagnostic installables à la demande
-
-            ### Installation
-            1. Télécharge l'APK ci-dessous
-            2. Active « Sources inconnues » dans les paramètres Android
-            3. Installe l'APK
-            4. Lance Void-Linux et laisse l'initialisation du rootfs se terminer
-          files: release/*.apk
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
