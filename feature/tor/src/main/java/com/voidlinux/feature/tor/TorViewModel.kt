@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 data class TorUiState(
-    val running: Boolean = false,
+    val orbotInstalled: Boolean = false,
+    val torRunning: Boolean = false,
     val starting: Boolean = false,
     val progress: Int = 0,
     val statusMessage: String = "Tor arrêté",
@@ -21,35 +22,58 @@ class TorViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<TorUiState> = _uiState
 
     init {
-        manager.registerReceiver()
         refresh()
     }
 
     fun refresh() {
-        val running = manager.isTorRunning()
+        val installed = manager.isOrbotInstalled()
+        val running = installed && manager.isTorRunning()
         _uiState.value = _uiState.value.copy(
-            running = running,
+            orbotInstalled = installed,
+            torRunning = running,
             starting = false,
-            statusMessage = if (running) "Tor actif ✅" else "Tor arrêté",
+            statusMessage = when {
+                !installed -> "Orbot non installé"
+                running -> "Tor actif ✅"
+                else -> "Tor arrêté"
+            },
             errorMessage = null
         )
     }
 
     fun startTor() {
+        if (!manager.isOrbotInstalled()) {
+            manager.promptInstall()
+            return
+        }
         manager.requestStart()
         _uiState.value = _uiState.value.copy(
             starting = true,
-            statusMessage = "Démarrage de Tor…"
+            statusMessage = "Ouverture d'Orbot…"
         )
     }
 
     fun stopTor() {
         manager.requestStop()
         _uiState.value = _uiState.value.copy(
-            running = false,
+            torRunning = false,
             starting = false,
             statusMessage = "Tor arrêté"
         )
+    }
+
+    /** À appeler quand l'utilisateur confirme que Tor tourne dans Orbot */
+    fun confirmTorRunning() {
+        manager.markRunning()
+        _uiState.value = _uiState.value.copy(
+            torRunning = true,
+            starting = false,
+            statusMessage = "Tor actif ✅"
+        )
+    }
+
+    fun installOrbot() {
+        manager.promptInstall()
     }
 
     fun clearError() {
