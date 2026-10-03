@@ -44,14 +44,13 @@
                     android:text="@string/tor_stopped"
                     style="@style/VoidText.Body" />
 
-                <ProgressBar
-                    android:id="@+id/progressBar"
-                    style="?android:attr/progressBarStyleHorizontal"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/installOrbot"
+                    style="@style/VoidButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_s"
-                    android:max="100"
-                    android:progressTint="@color/void_accent"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:text="@string/tor_install_orbot"
                     android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
@@ -61,6 +60,15 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/space_m"
                     android:text="@string/tor_enable" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/confirmTor"
+                    style="@style/VoidButton.Outlined"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_s"
+                    android:text="J'ai activé Tor dans Orbot"
+                    android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/stopTor"
