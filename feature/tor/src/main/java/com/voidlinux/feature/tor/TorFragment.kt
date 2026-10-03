@@ -33,23 +33,22 @@ class TorFragment : Fragment() {
 
         binding.startTor.setOnClickListener { viewModel.startTor() }
         binding.stopTor.setOnClickListener { viewModel.stopTor() }
+        binding.installOrbot.setOnClickListener { viewModel.installOrbot() }
         binding.openBrowser.setOnClickListener {
             startActivity(Intent(requireContext(), OnionBrowserActivity::class.java))
         }
+        binding.confirmTor.setOnClickListener { viewModel.confirmTorRunning() }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 binding.torStatus.text = state.statusMessage
-                binding.startTor.isEnabled = !state.running && !state.starting
-                binding.stopTor.isEnabled = state.running
-                binding.openBrowser.isEnabled = state.running
-
-                if (state.starting) {
-                    binding.progressBar.visibility = View.VISIBLE
-                    binding.progressBar.progress = state.progress
-                } else {
-                    binding.progressBar.visibility = View.GONE
-                }
+                binding.startTor.isEnabled = state.orbotInstalled && !state.torRunning
+                binding.stopTor.isEnabled = state.torRunning
+                binding.installOrbot.visibility =
+                    if (state.orbotInstalled) View.GONE else View.VISIBLE
+                binding.confirmTor.visibility =
+                    if (state.orbotInstalled && !state.torRunning) View.VISIBLE else View.GONE
+                binding.openBrowser.isEnabled = state.torRunning
 
                 state.errorMessage?.let { msg ->
                     Components.showSnackLong(binding.root, msg)
