@@ -23,6 +23,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -36,4 +42,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Tor intégré — pas besoin d'Orbot externe
+    implementation("info.guardianproject:tor-android:0.4.9.13")
+    implementation("info.guardianproject:jtorctl:0.4.5.7")
 }
