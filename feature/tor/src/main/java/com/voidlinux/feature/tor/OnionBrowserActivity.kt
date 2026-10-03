@@ -1,21 +1,31 @@
 package com.voidlinux.feature.tor
 
+import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.os.Bundle
+import android.text.InputType
 import android.view.inputmethod.EditorInfo
-import android.webkit.CookieManager
 import android.webkit.WebChromeClient
-import android.webkit.WebView
 import android.webkit.WebSettings
-import android.webkit.WebStorage
-import android.net.Uri
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ProgressBar
 import androidx.appcompat.app.AppCompatActivity
-import com.voidlinux.feature.tor.R
+import com.voidlinux.feature.tor.OnionDirectory.Category
+import com.voidlinux.feature.tor.OnionDirectory.OnionLink
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 /**
- * Navigateur Tor intégré : charge les URL http(s) et .onion via SOCKS.
+ * Navigateur .onion durci avec annuaire intégré.
+ *
+ * Sécurité :
+ * - JavaScript désactivé par défaut (activable manuellement)
+ * - Pas d'allowFileAccess / allowContentAccess
+ * - Pas de JavascriptInterface
+ * - Schémas autorisés : http, https, .onion
+ * - Blocage des redirections non-.onion
  */
 class OnionBrowserActivity : AppCompatActivity() {
 
@@ -23,7 +33,12 @@ class OnionBrowserActivity : AppCompatActivity() {
     private lateinit var urlBar: EditText
     private lateinit var progressBar: ProgressBar
     private lateinit var backButton: ImageButton
+    private lateinit var directoryButton: FloatingActionButton
+    private lateinit var toggleJsButton: ImageButton
 
+    private var javaScriptEnabled = false
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onion_browser)
@@ -32,35 +47,39 @@ class OnionBrowserActivity : AppCompatActivity() {
         urlBar = findViewById(R.id.urlBar)
         progressBar = findViewById(R.id.progressBar)
         backButton = findViewById(R.id.backButton)
+        directoryButton = findViewById(R.id.directoryButton)
+        toggleJsButton = findViewById(R.id.toggleJsButton)
 
         setupWebView()
         setupUrlBar()
-        setupBackButton()
+        setupButtons()
 
-        urlBar.setText("https://check.torproject.org")
         webView.loadUrl("https://check.torproject.org")
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val settings = webView.settings
-        settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = false
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
-            builtInZoomControls = true
-            displayZoomControls = false
-            mediaPlaybackRequiresUserGesture = true
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
 
+        // ---- Sécurité maximale ----
+        settings.javaScriptEnabled = false              // Désactivé par défaut
+        settings.domStorageEnabled = false
+        settings.databaseEnabled = false
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+        settings.javaScriptCanOpenWindowsAutomatically = false
+        settings.setSupportMultipleWindows(false)
+        settings.loadWithOverviewMode = true
+        settings.useWideViewPort = true
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
+        settings.mediaPlaybackRequiresUserGesture = true
+        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        settings.userAgentString = TorWebViewClient.USER_AGENT
+        settings.setSupportZoom(true)
+
+        // ---- WebViewClient durci ----
         webView.webViewClient = TorWebViewClient(socksPort = 9050)
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -86,53 +105,144 @@ class OnionBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupBackButton() {
+    private fun setupButtons() {
         backButton.setOnClickListener {
-            if (webView.canGoBack()) webView.goBack()
-            else finish()
+            if (webView.canGoBack()) webView.goBack() else finish()
+        }
+
+        directoryButton.setOnClickListener {
+            showDirectory()
+        }
+
+        toggleJsButton.setOnClickListener {
+            toggleJavaScript()
         }
     }
 
-    private fun navigate(input: String) {
-        val value = input.trim()
-        if (value.isEmpty()) return
+    /**
+     * Affiche l'annuaire .onion groupé par catégories.
+     */
+    private fun showDirectory() {
+        val categories = Category.values()
+        val labels = categories.map { it.label }.toTypedArray()
 
-        val hasScheme = SCHEME_PATTERN.containsMatchIn(value)
-        val candidate = if (hasScheme) value else "https://$value"
-        val parsed = Uri.parse(candidate)
-        val url = when {
-            hasScheme && parsed.scheme !in ALLOWED_SCHEMES -> {
-                urlBar.error = "Seules les URL HTTP(S) sont autorisées"
-                return
+        AlertDialog.Builder(this)
+            .setTitle("Annuaire .onion")
+            .setItems(labels) { _, which ->
+                showCategory(categories[which])
             }
-            parsed.host?.endsWith(".onion", ignoreCase = true) == true && !hasScheme ->
-                "http://$value"
-            parsed.host != null -> candidate
-            else -> "https://duckduckgo.com/?q=${Uri.encode(value)}"
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /**
+     * Affiche la liste des liens d'une catégorie.
+     */
+    private fun showCategory(category: Category) {
+        val links = OnionDirectory.byCategory(category)
+        if (links.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle(category.label)
+                .setMessage("Aucun lien dans cette catégorie.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
         }
-        urlBar.error = null
-        urlBar.setText(url)
+
+        val labels = links.map { "${it.name} — ${it.description}" }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle(category.label)
+            .setItems(labels) { _, which ->
+                val link = links[which]
+                confirmNavigation(link)
+            }
+            .setNegativeButton("Retour", null)
+            .show()
+    }
+
+    /**
+     * Demande confirmation avant de naviguer vers un site externe.
+     */
+    private fun confirmNavigation(link: OnionLink) {
+        AlertDialog.Builder(this)
+            .setTitle(link.name)
+            .setMessage(
+                "${link.description}\n\n" +
+                "${link.url}\n\n" +
+                "⚠️ Void-Linux ne contrôle pas le contenu de ce site.\n" +
+                "Navigue de manière responsable."
+            )
+            .setPositiveButton("Ouvrir") { _, _ ->
+                navigate(link.url)
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /**
+     * Active/désactive JavaScript (désactivé par défaut pour la sécurité).
+     */
+    private fun toggleJavaScript() {
+        javaScriptEnabled = !javaScriptEnabled
+
+        AlertDialog.Builder(this)
+            .setTitle(if (javaScriptEnabled) "Activer JavaScript ?" else "Désactiver JavaScript ?")
+            .setMessage(
+                if (javaScriptEnabled)
+                    "⚠️ Activer JavaScript augmente les risques d'exploitation XSS " +
+                    "sur les sites .onion. À n'utiliser que si le site l'exige."
+                else
+                    "JavaScript sera désactivé. Le site peut ne plus fonctionner correctement."
+            )
+            .setPositiveButton("Confirmer") { _, _ ->
+                webView.settings.javaScriptEnabled = javaScriptEnabled
+                webView.reload()
+            }
+            .setNegativeButton("Annuler") { _, _ ->
+                javaScriptEnabled = !javaScriptEnabled
+            }
+            .show()
+    }
+
+    /**
+     * Navigue vers une URL en normalisant le format.
+     */
+    private fun navigate(input: String) {
+        val url = normalizeUrl(input)
+        if (!isUrlAllowed(url)) {
+            AlertDialog.Builder(this)
+                .setTitle("URL non autorisée")
+                .setMessage("Seuls les schémas http, https et les domaines .onion sont autorisés.")
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
         webView.loadUrl(url)
     }
 
+    private fun normalizeUrl(input: String): String {
+        val trimmed = input.trim()
+        return when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.endsWith(".onion") -> "http://$trimmed"
+            trimmed.contains(".") -> "https://$trimmed"
+            else -> "https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/?q=$trimmed"
+        }
+    }
+
+    private fun isUrlAllowed(url: String): Boolean {
+        return url.startsWith("http://") || url.startsWith("https://")
+    }
+
+    @Deprecated("Deprecated in API 33")
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack()
         else super.onBackPressed()
     }
 
     override fun onDestroy() {
-        webView.clearHistory()
-        webView.clearCache(true)
         webView.destroy()
-        CookieManager.getInstance().removeAllCookies {
-            CookieManager.getInstance().flush()
-        }
-        WebStorage.getInstance().deleteAllData()
         super.onDestroy()
-    }
-
-    companion object {
-        private val SCHEME_PATTERN = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
-        private val ALLOWED_SCHEMES = setOf("http", "https")
     }
 }
