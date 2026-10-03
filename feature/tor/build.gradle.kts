@@ -37,4 +37,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Chiffrement des préférences (PIN/schéma de verrouillage)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
