@@ -1,0 +1,71 @@
+name: Generate Android Release Keystore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate release keystore
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          for name in KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name est absent."
+              exit 1
+            fi
+          done
+
+          keytool -genkeypair \
+            -v \
+            -keystore "$RUNNER_TEMP/void-linux-release.jks" \
+            -storetype JKS \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=Void-Linux, OU=Release, O=Void-Linux, L=Pointe-Noire, ST=Republic of the Congo, C=CG"
+
+          chmod 600 "$RUNNER_TEMP/void-linux-release.jks"
+
+          echo "Keystore créé avec succès."
+
+          keytool -list \
+            -keystore "$RUNNER_TEMP/void-linux-release.jks" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS"
+
+      - name: Encode keystore
+        run: |
+          base64 -w 0 "$RUNNER_TEMP/void-linux-release.jks" \
+            > "$RUNNER_TEMP/keystore-base64.txt"
+
+          echo "Base64 généré."
+
+      - name: Upload keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: void-linux-release-keystore
+          path: |
+            ${{ runner.temp }}/void-linux-release.jks
+            ${{ runner.temp }}/keystore-base64.txt
+          retention-days: 1
