@@ -9,7 +9,6 @@ android {
 
     defaultConfig {
         minSdk = 29
-        consumerProguardFiles("proguard-rules.pro")
     }
 
     compileOptions {
@@ -24,22 +23,6 @@ android {
     buildFeatures {
         viewBinding = true
     }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-        resources {
-            excludes += setOf(
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE",
-                "META-INF/LICENSE.txt",
-                "META-INF/NOTICE",
-                "META-INF/NOTICE.txt",
-                "META-INF/*.kotlin_module"
-            )
-        }
-    }
 }
 
 dependencies {
@@ -50,11 +33,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.android)
-
-    // Tor intégré — plus besoin d'Orbot externe
-    implementation("info.guardianproject:tor-android:0.4.9.13")
-    implementation("info.guardianproject:jtorctl:0.4.5.7")
 }
