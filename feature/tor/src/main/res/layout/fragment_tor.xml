@@ -44,13 +44,14 @@
                     android:text="@string/tor_stopped"
                     style="@style/VoidText.Body" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/installOrbot"
-                    style="@style/VoidButton"
+                <ProgressBar
+                    android:id="@+id/progressBar"
+                    style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_m"
-                    android:text="@string/tor_install_orbot"
+                    android:layout_marginTop="@dimen/space_s"
+                    android:max="100"
+                    android:progressTint="@color/void_accent"
                     android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
