@@ -15,14 +15,22 @@ class AnsiParser(private val buffer: TerminalBuffer) {
 
     // Couleurs ANSI standard
     private val ansiColors = intArrayOf(
-        Color.parseColor("#000000"), // noir
-        Color.parseColor("#FF5555"), // rouge
-        Color.parseColor("#50FA7B"), // vert
-        Color.parseColor("#F1FA8C"), // jaune
-        Color.parseColor("#6272A4"), // bleu
-        Color.parseColor("#BD93F9"), // magenta
-        Color.parseColor("#8BE9FD"), // cyan
-        Color.parseColor("#F8F8F2")  // blanc
+        Color.rgb(0, 0, 0),       // 0 black
+        Color.rgb(205, 49, 49),   // 1 red
+        Color.rgb(13, 188, 121),  // 2 green
+        Color.rgb(229, 229, 16),  // 3 yellow
+        Color.rgb(36, 114, 200),  // 4 blue
+        Color.rgb(188, 63, 188),  // 5 magenta
+        Color.rgb(17, 168, 205),  // 6 cyan
+        Color.rgb(229, 229, 229), // 7 white
+        Color.rgb(102, 102, 102), // 8 bright black
+        Color.rgb(241, 76, 76),   // 9 bright red
+        Color.rgb(35, 209, 139),  // 10 bright green
+        Color.rgb(245, 245, 67),  // 11 bright yellow
+        Color.rgb(59, 142, 234),  // 12 bright blue
+        Color.rgb(214, 112, 214), // 13 bright magenta
+        Color.rgb(41, 184, 219),  // 14 bright cyan
+        Color.rgb(255, 255, 255)  // 15 bright white
     )
 
     // Attributs courants
@@ -32,6 +40,8 @@ class AnsiParser(private val buffer: TerminalBuffer) {
     private var italic = false
     private var underline = false
     private var reverse = false
+    private var savedCursorRow = 0
+    private var savedCursorCol = 0
 
     fun feed(data: String) {
         for (ch in data) {
@@ -52,9 +62,10 @@ class AnsiParser(private val buffer: TerminalBuffer) {
             '\r' -> buffer.moveCursor(buffer.cursorRow, 0)
             '\t' -> {
                 val next = ((buffer.cursorCol / 8) + 1) * 8
-                buffer.moveCursor(buffer.cursorRow, next)
+                buffer.moveCursor(buffer.cursorRow, next.coerceAtMost(buffer.cols - 1))
             }
             '\b' -> buffer.backspace()
+            '\u0007' -> Unit
             else -> {
                 if (ch.code >= 32) {
                     buffer.writeChar(
@@ -97,24 +108,20 @@ class AnsiParser(private val buffer: TerminalBuffer) {
             'B' -> buffer.moveCursorRelative(params.getOrNull(0) ?: 1, 0)
             'C' -> buffer.moveCursorRelative(0, params.getOrNull(0) ?: 1)
             'D' -> buffer.moveCursorRelative(0, -(params.getOrNull(0) ?: 1))
-            'J' -> {
-                when (params.getOrNull(0) ?: 0) {
-                    2 -> buffer.clear()
-                    0 -> {
-                        buffer.clearLine()
-                        for (r in buffer.cursorRow + 1 until buffer.rows) {
-                            for (c in 0 until buffer.cols) buffer.setCell(r, c, TerminalBuffer.Cell())
-                        }
-                    }
-                }
-            }
-            'K' -> buffer.clearLine()
-            'P' -> buffer.deleteChar()
+            'J' -> eraseDisplay(params.getOrNull(0) ?: 0)
+            'K' -> eraseLine(params.getOrNull(0) ?: 0)
+            'P' -> repeat(params.getOrNull(0) ?: 1) { buffer.deleteChar() }
             'G' -> buffer.moveCursor(buffer.cursorRow, (params.getOrNull(0) ?: 1) - 1)
             'd' -> buffer.moveCursor((params.getOrNull(0) ?: 1) - 1, buffer.cursorCol)
             '@' -> buffer.insertChars(params.getOrNull(0) ?: 1)
             'X' -> buffer.eraseChars(params.getOrNull(0) ?: 1)
-            else -> { /* non supporté */ }
+            's' -> {
+                savedCursorRow = buffer.cursorRow
+                savedCursorCol = buffer.cursorCol
+            }
+            'u' -> buffer.moveCursor(savedCursorRow, savedCursorCol)
+            'h', 'l' -> Unit // terminal mode toggles; no-op for unsupported modes
+            else -> Unit
         }
 
         state = State.TEXT
@@ -124,6 +131,44 @@ class AnsiParser(private val buffer: TerminalBuffer) {
         // OSC : ignorer jusqu'à BEL ou ST
         if (ch == '\u0007') state = State.TEXT
         else if (ch == '\u001B') state = State.ESCAPE // ESC \ (ST) termine aussi un OSC
+    }
+
+    private fun eraseDisplay(mode: Int) {
+        when (mode) {
+            2 -> buffer.clear()
+            0 -> {
+                // From cursor to end of display.
+                buffer.clearLineFromCursor()
+                for (r in buffer.cursorRow + 1 until buffer.rows) {
+                    for (c in 0 until buffer.cols) {
+                        buffer.setCell(r, c, TerminalBuffer.Cell())
+                    }
+                }
+            }
+            1 -> {
+                // From start of display to cursor.
+                for (r in 0 until buffer.cursorRow) {
+                    for (c in 0 until buffer.cols) {
+                        buffer.setCell(r, c, TerminalBuffer.Cell())
+                    }
+                }
+                for (c in 0..buffer.cursorCol.coerceAtMost(buffer.cols - 1)) {
+                    buffer.setCell(buffer.cursorRow, c, TerminalBuffer.Cell())
+                }
+            }
+        }
+    }
+
+    private fun eraseLine(mode: Int) {
+        when (mode) {
+            0 -> buffer.clearLineFromCursor()
+            1 -> {
+                for (c in 0..buffer.cursorCol.coerceAtMost(buffer.cols - 1)) {
+                    buffer.setCell(buffer.cursorRow, c, TerminalBuffer.Cell())
+                }
+            }
+            2 -> buffer.clearLine()
+        }
     }
 
     private fun parseParams(s: String): List<Int> {

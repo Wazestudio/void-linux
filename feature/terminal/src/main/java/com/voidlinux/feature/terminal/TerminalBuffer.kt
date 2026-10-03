@@ -103,6 +103,12 @@ class TerminalBuffer(
         }
     }
 
+    fun clearLineFromCursor() {
+        for (c in cursorCol until cols) {
+            grid[cursorRow][c] = Cell()
+        }
+    }
+
     fun moveCursor(row: Int, col: Int) {
         cursorRow = row.coerceIn(0, rows - 1)
         cursorCol = col.coerceIn(0, cols - 1)

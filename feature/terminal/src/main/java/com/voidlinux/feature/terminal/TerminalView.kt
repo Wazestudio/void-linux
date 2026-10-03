@@ -67,18 +67,34 @@ class TerminalView @JvmOverloads constructor(
                 EditorInfo.IME_ACTION_NONE
 
         return object : BaseInputConnection(this, true) {
+            // A terminal is not a normal editable field. IMEs may call
+            // setComposingText() several times while the user is composing.
+            // Sending every composition update to the PTY would duplicate text.
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
+                if (!text.isNullOrEmpty()) {
+                    onInput?.invoke(text.toString().replace('\n', '\r'))
+                }
                 return true
             }
 
-            override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-                if (!text.isNullOrEmpty()) onInput?.invoke(text.toString())
+            override fun setComposingText(
+                text: CharSequence?,
+                newCursorPosition: Int
+            ): Boolean {
+                // Keep composition inside the IME. Only committed text is sent
+                // to the shell, which matches a real terminal's input stream.
                 return true
             }
 
-            override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-                repeat(maxOf(beforeLength, afterLength).coerceAtMost(32)) {
+            override fun finishComposingText(): Boolean = true
+
+            override fun deleteSurroundingText(
+                beforeLength: Int,
+                afterLength: Int
+            ): Boolean {
+                // There is no editable buffer in a terminal. Backspace is the
+                // correct byte-level operation for an IME delete request.
+                repeat(beforeLength.coerceAtMost(32)) {
                     onInput?.invoke("\u007F")
                 }
                 return true
@@ -86,15 +102,18 @@ class TerminalView @JvmOverloads constructor(
 
             override fun sendKeyEvent(event: KeyEvent): Boolean {
                 if (event.action != KeyEvent.ACTION_DOWN) return true
+
                 val ansi = KeyboardHandler.keyCodeToAnsi(event.keyCode, event)
                 if (ansi != null) {
                     onInput?.invoke(ansi)
-                } else {
-                    when (event.keyCode) {
-                        KeyEvent.KEYCODE_ENTER -> onInput?.invoke("\r")
-                        KeyEvent.KEYCODE_DEL -> onInput?.invoke("\u007F")
-                        KeyEvent.KEYCODE_SPACE -> onInput?.invoke(" ")
-                    }
+                    return true
+                }
+
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_SPACE -> onInput?.invoke(" ")
+                    KeyEvent.KEYCODE_ENTER -> onInput?.invoke("\r")
+                    KeyEvent.KEYCODE_DEL -> onInput?.invoke("\u007F")
+                    else -> return false
                 }
                 return true
             }
