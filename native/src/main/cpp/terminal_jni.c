@@ -62,7 +62,8 @@ Java_com_voidlinux_core_native_NativeBridge_execInPty(JNIEnv *env, jclass clazz,
 
     pid_t pid = fork();
     if (pid == 0) {
-        if (setsid() < 0 || ioctl(slave_fd, TIOCSCTTY, 0) < 0 ||
+        if (setsid() < 0 ||
+            ioctl(slave_fd, TIOCSCTTY, 0) < 0 ||
             dup2(slave_fd, STDIN_FILENO) < 0 ||
             dup2(slave_fd, STDOUT_FILENO) < 0 ||
             dup2(slave_fd, STDERR_FILENO) < 0) {
@@ -125,15 +126,25 @@ Java_com_voidlinux_core_native_NativeBridge_killProcess(JNIEnv *env, jclass claz
 JNIEXPORT jint JNICALL
 Java_com_voidlinux_core_native_NativeBridge_writeToPty(JNIEnv *env, jclass clazz,
                                                       jint fd, jbyteArray data) {
+    if (fd < 0 || data == NULL) return -1;
+
     jsize len = (*env)->GetArrayLength(env, data);
+    if (len <= 0) return 0;
+
     jbyte *bytes = (*env)->GetByteArrayElements(env, data, NULL);
     if (!bytes) return -1;
 
     ssize_t written;
     do {
-        written = write(fd, bytes, len);
+        written = write(fd, bytes, (size_t) len);
     } while (written < 0 && errno == EINTR);
+
     (*env)->ReleaseByteArrayElements(env, data, bytes, JNI_ABORT);
+
+    if (written < 0) {
+        LOGI("PTY write failed fd=%d errno=%d (%s)", fd, errno, strerror(errno));
+        return -1;
+    }
     return (jint) written;
 }
 
