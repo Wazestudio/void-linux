@@ -17,6 +17,7 @@ import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -50,9 +51,7 @@ class OnionBrowserActivity : AppCompatActivity() {
     private val unlockLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode != RESULT_OK) {
-            finish()
-        }
+        if (result.resultCode != RESULT_OK) finish()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -60,7 +59,6 @@ class OnionBrowserActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         browserLock = BrowserLock(this)
-
         if (browserLock.isLockEnabled()) {
             unlockLauncher.launch(Intent(this, LockActivity::class.java))
         }
@@ -87,90 +85,50 @@ class OnionBrowserActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val settings = webView.settings
-
         settings.javaScriptEnabled = false
         settings.domStorageEnabled = false
         settings.databaseEnabled = false
-
         settings.allowFileAccess = false
         settings.allowContentAccess = false
-
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
-
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
-
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
-
         settings.mediaPlaybackRequiresUserGesture = true
-
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-
         settings.userAgentString = TorWebViewClient.USER_AGENT
 
+        // WebViewClient Tor (proxy SOCKS 9050)
         webView.webViewClient = object : TorWebViewClient(socksPort = 9050) {
-
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?
-            ) {
+            override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-
-                url?.let {
-                    urlBar.setText(it)
-                }
-
+                url?.let { urlBar.setText(it) }
                 tabs.getOrNull(currentTabIndex)?.url = url ?: ""
             }
         }
 
+        // WebChromeClient pour la barre de progression
         webView.webChromeClient = object : WebChromeClient() {
-
-            override fun onProgressChanged(
-                view: WebView?,
-                newProgress: Int
-            ) {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progressBar.progress = newProgress
-
                 progressBar.visibility =
-                    if (newProgress < 100) {
-                        View.VISIBLE
-                    } else {
-                        View.GONE
-                    }
+                    if (newProgress < 100) View.VISIBLE else View.GONE
             }
 
-            override fun onReceivedTitle(
-                view: WebView?,
-                title: String?
-            ) {
+            override fun onReceivedTitle(view: WebView?, title: String?) {
                 updateTabTitle(title ?: "Sans titre")
             }
         }
 
-        // =========================================================
-        // GESTION DES TÉLÉCHARGEMENTS
-        // =========================================================
-
-        webView.setDownloadListener(
-            DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-                handleDownload(
-                    url,
-                    userAgent,
-                    contentDisposition,
-                    mimeType
-                )
-            }
-        )
+        // Gestion des téléchargements
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            handleDownload(url, userAgent, contentDisposition, mimeType)
+        })
     }
 
-    /**
-     * Télécharge un fichier vers Download/void-linux/
-     * via DownloadManager.
-     */
     private fun handleDownload(
         url: String,
         userAgent: String,
@@ -178,22 +136,14 @@ class OnionBrowserActivity : AppCompatActivity() {
         mimeType: String
     ) {
         try {
-            val fileName = URLUtil.guessFileName(
-                url,
-                contentDisposition,
-                mimeType
-            )
-
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
             val subPath = "void-linux"
 
-            val request = DownloadManager.Request(
-                Uri.parse(url)
-            )
+            val request = DownloadManager.Request(Uri.parse(url))
                 .setTitle(fileName)
                 .setDescription("Téléchargement via Void-Linux")
                 .setNotificationVisibility(
-                    DownloadManager.Request
-                        .VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
                 )
                 .setDestinationInExternalPublicDir(
                     Environment.DIRECTORY_DOWNLOADS,
@@ -204,35 +154,22 @@ class OnionBrowserActivity : AppCompatActivity() {
                 .setAllowedOverRoaming(true)
 
             if (userAgent.isNotEmpty()) {
-                request.addRequestHeader(
-                    "User-Agent",
-                    userAgent
-                )
+                request.addRequestHeader("User-Agent", userAgent)
             }
 
-            val cookies =
-                CookieManager.getInstance().getCookie(url)
-
+            val cookies = CookieManager.getInstance().getCookie(url)
             if (!cookies.isNullOrEmpty()) {
-                request.addRequestHeader(
-                    "Cookie",
-                    cookies
-                )
+                request.addRequestHeader("Cookie", cookies)
             }
 
-            val downloadManager =
-                getSystemService(
-                    Context.DOWNLOAD_SERVICE
-                ) as DownloadManager
-
-            downloadManager.enqueue(request)
+            val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.enqueue(request)
 
             Toast.makeText(
                 this,
                 "Téléchargement démarré : $fileName\n→ Download/$subPath/",
                 Toast.LENGTH_LONG
             ).show()
-
         } catch (e: Exception) {
             Toast.makeText(
                 this,
@@ -243,131 +180,65 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
-
         backButton.setOnClickListener {
-            if (webView.canGoBack()) {
-                webView.goBack()
-            }
+            if (webView.canGoBack()) webView.goBack()
         }
-
         forwardButton.setOnClickListener {
-            if (webView.canGoForward()) {
-                webView.goForward()
-            }
+            if (webView.canGoForward()) webView.goForward()
         }
-
-        menuButton.setOnClickListener {
-            showMenu()
-        }
-
-        directoryButton.setOnClickListener {
-            showDirectory()
-        }
+        menuButton.setOnClickListener { showMenu() }
+        directoryButton.setOnClickListener { showDirectory() }
 
         urlBar.setOnEditorActionListener { _, actionId, _ ->
-
             if (actionId == EditorInfo.IME_ACTION_GO) {
                 navigate(urlBar.text.toString())
                 true
-            } else {
-                false
-            }
+            } else false
         }
     }
 
     private fun setupTabs() {
-
-        tabLayout.addOnTabSelectedListener(
-            object : TabLayout.OnTabSelectedListener {
-
-                override fun onTabSelected(
-                    tab: TabLayout.Tab
-                ) {
-                    switchToTab(tab.position)
-                }
-
-                override fun onTabUnselected(
-                    tab: TabLayout.Tab
-                ) {
-                }
-
-                override fun onTabReselected(
-                    tab: TabLayout.Tab
-                ) {
-                    closeTab(tab.position)
-                }
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                switchToTab(tab.position)
             }
-        )
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {
+                closeTab(tab.position)
+            }
+        })
     }
 
-    private fun newTab(
-        url: String = "about:blank"
-    ) {
+    private fun newTab(url: String = "about:blank") {
         val tab = BrowserTab(url = url)
-
         tabs.add(tab)
-
-        tabLayout.addTab(
-            tabLayout.newTab()
-                .setText("Nouvel onglet")
-        )
-
+        tabLayout.addTab(tabLayout.newTab().setText("Nouvel onglet"))
         switchToTab(tabs.size - 1)
-
-        if (url != "about:blank") {
-            navigate(url)
-        }
+        if (url != "about:blank") navigate(url)
     }
 
     private fun closeTab(index: Int) {
-
-        if (tabs.size <= 1) {
-            return
-        }
-
-        if (index !in tabs.indices) {
-            return
-        }
-
+        if (tabs.size <= 1) return
         tabs.removeAt(index)
         tabLayout.removeTabAt(index)
-
-        if (currentTabIndex >= tabs.size) {
-            currentTabIndex = tabs.size - 1
-        }
-
+        if (currentTabIndex >= tabs.size) currentTabIndex = tabs.size - 1
         switchToTab(currentTabIndex)
     }
 
     private fun switchToTab(index: Int) {
-
-        if (index !in tabs.indices) {
-            return
-        }
-
+        if (index !in tabs.indices) return
         currentTabIndex = index
-
-        urlBar.setText(
-            tabs[index].url
-        )
+        urlBar.setText(tabs[index].url)
     }
 
-    private fun updateTabTitle(
-        title: String
-    ) {
-
+    private fun updateTabTitle(title: String) {
         if (currentTabIndex in tabs.indices) {
-
             tabs[currentTabIndex].title = title
-
-            tabLayout
-                .getTabAt(currentTabIndex)
-                ?.setText(title.take(20))
+            tabLayout.getTabAt(currentTabIndex)?.setText(title.take(20))
         }
     }
 
     private fun showMenu() {
-
         val options = arrayOf(
             "Nouvel onglet",
             "Nouvel onglet privé",
@@ -381,23 +252,14 @@ class OnionBrowserActivity : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setItems(options) { _, which ->
-
                 when (which) {
-
                     0 -> newTab()
-
                     1 -> newTabIncognito()
-
                     2 -> closeTab(currentTabIndex)
-
                     3 -> openDownloadsFolder()
-
                     4 -> showHistory()
-
                     5 -> clearData()
-
                     6 -> showLockSettings()
-
                     7 -> showSettings()
                 }
             }
@@ -405,77 +267,36 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun newTabIncognito() {
-
-        val tab = BrowserTab(
-            url = "about:blank",
-            isIncognito = true
-        )
-
+        val tab = BrowserTab(url = "about:blank", isIncognito = true)
         tabs.add(tab)
-
-        tabLayout.addTab(
-            tabLayout.newTab()
-                .setText("Incognito")
-        )
-
+        tabLayout.addTab(tabLayout.newTab().setText("Incognito"))
         switchToTab(tabs.size - 1)
     }
 
-    /**
-     * Ouvre le dossier Download/void-linux/
-     * dans le gestionnaire de fichiers.
-     */
     private fun openDownloadsFolder() {
-
         try {
-
             val downloadsDir = File(
-                Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS
-                ),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
                 "void-linux"
             )
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
-            if (!downloadsDir.exists()) {
-                downloadsDir.mkdirs()
-            }
-
-            val intent = Intent(
-                Intent.ACTION_VIEW
-            ).apply {
-
+            val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(
-                    Uri.parse(
-                        "content://com.android.externalstorage.documents/" +
-                            "document/primary%3ADownload%2Fvoid-linux"
-                    ),
+                    Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload%2Fvoid-linux"),
                     "resource/folder"
                 )
-
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                )
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
             try {
-
                 startActivity(intent)
-
-            } catch (_: Exception) {
-
-                val fallback = Intent(
-                    DownloadManager.ACTION_VIEW_DOWNLOADS
-                )
-
-                fallback.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                )
-
+            } catch (e: Exception) {
+                val fallback = Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)
+                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(fallback)
             }
-
         } catch (e: Exception) {
-
             Toast.makeText(
                 this,
                 "Impossible d'ouvrir le dossier : ${e.message}",
@@ -485,37 +306,19 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun showHistory() {
-
-        Toast.makeText(
-            this,
-            "Historique : fonctionnalité à venir",
-            Toast.LENGTH_SHORT
-        ).show()
+        Toast.makeText(this, "Historique : fonctionnalité à venir", Toast.LENGTH_SHORT).show()
     }
 
     private fun clearData() {
-
         webView.clearHistory()
         webView.clearCache(true)
         webView.clearFormData()
-
-        CookieManager
-            .getInstance()
-            .removeAllCookies(null)
-
-        CookieManager
-            .getInstance()
-            .flush()
-
-        Toast.makeText(
-            this,
-            "Données de navigation effacées",
-            Toast.LENGTH_SHORT
-        ).show()
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        Toast.makeText(this, "Données de navigation effacées", Toast.LENGTH_SHORT).show()
     }
 
     private fun showLockSettings() {
-
         val options = arrayOf(
             "Désactiver le verrouillage",
             "Définir un PIN",
@@ -525,22 +328,12 @@ class OnionBrowserActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Verrouillage du navigateur")
             .setItems(options) { _, which ->
-
                 when (which) {
-
                     0 -> {
-
                         browserLock.disable()
-
-                        Toast.makeText(
-                            this,
-                            "Verrouillage désactivé",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(this, "Verrouillage désactivé", Toast.LENGTH_SHORT).show()
                     }
-
                     1 -> setPin()
-
                     2 -> setPattern()
                 }
             }
@@ -548,13 +341,8 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun setPin() {
-
         val input = EditText(this).apply {
-
-            inputType =
-                InputType.TYPE_CLASS_NUMBER or
-                    InputType.TYPE_NUMBER_VARIATION_PASSWORD
-
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             hint = "Nouveau PIN (4-8 chiffres)"
         }
 
@@ -562,110 +350,54 @@ class OnionBrowserActivity : AppCompatActivity() {
             .setTitle("Définir un PIN")
             .setView(input)
             .setPositiveButton("Valider") { _, _ ->
-
                 val pin = input.text.toString()
-
-                if (
-                    pin.length in 4..8 &&
-                    pin.all { it.isDigit() }
-                ) {
-
+                if (pin.length in 4..8 && pin.all { it.isDigit() }) {
                     browserLock.setPin(pin)
-
-                    Toast.makeText(
-                        this,
-                        "PIN défini",
-                        Toast.LENGTH_SHORT
-                    ).show()
-
+                    Toast.makeText(this, "PIN défini", Toast.LENGTH_SHORT).show()
                 } else {
-
-                    Toast.makeText(
-                        this,
-                        "PIN invalide (4-8 chiffres)",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, "PIN invalide (4-8 chiffres)", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton(
-                "Annuler",
-                null
-            )
+            .setNegativeButton("Annuler", null)
             .show()
     }
 
     private fun setPattern() {
-
         val input = EditText(this).apply {
-
-            inputType =
-                InputType.TYPE_CLASS_NUMBER
-
+            inputType = InputType.TYPE_CLASS_NUMBER
             hint = "Schéma (ex: 1235789)"
         }
 
         AlertDialog.Builder(this)
             .setTitle("Définir un schéma")
-            .setMessage(
-                "Entre la séquence de chiffres du schéma (min 4 points)."
-            )
+            .setMessage("Entre la séquence de chiffres du schéma (min 4 points).")
             .setView(input)
             .setPositiveButton("Valider") { _, _ ->
-
                 val pattern = input.text.toString()
-
-                if (
-                    pattern.length >= 4 &&
-                    pattern.all { it.isDigit() }
-                ) {
-
+                if (pattern.length >= 4 && pattern.all { it.isDigit() }) {
                     browserLock.setPattern(pattern)
-
-                    Toast.makeText(
-                        this,
-                        "Schéma défini",
-                        Toast.LENGTH_SHORT
-                    ).show()
-
+                    Toast.makeText(this, "Schéma défini", Toast.LENGTH_SHORT).show()
                 } else {
-
-                    Toast.makeText(
-                        this,
-                        "Schéma invalide (min 4 points)",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, "Schéma invalide (min 4 points)", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton(
-                "Annuler",
-                null
-            )
+            .setNegativeButton("Annuler", null)
             .show()
     }
 
     private fun showSettings() {
-
         val options = arrayOf(
-            if (javaScriptEnabled) {
-                "Désactiver JavaScript"
-            } else {
-                "Activer JavaScript"
-            },
+            if (javaScriptEnabled) "Désactiver JavaScript" else "Activer JavaScript",
             "Vider le cache",
             "Réinitialiser le navigateur"
         )
 
         AlertDialog.Builder(this)
             .setItems(options) { _, which ->
-
                 when (which) {
-
                     0 -> toggleJavaScript()
-
                     1 -> webView.clearCache(true)
-
                     2 -> {
-
                         clearData()
                         browserLock.disable()
                     }
@@ -675,161 +407,76 @@ class OnionBrowserActivity : AppCompatActivity() {
     }
 
     private fun toggleJavaScript() {
-
         javaScriptEnabled = !javaScriptEnabled
-
-        webView.settings.javaScriptEnabled =
-            javaScriptEnabled
-
+        webView.settings.javaScriptEnabled = javaScriptEnabled
         webView.reload()
-
         Toast.makeText(
             this,
-            if (javaScriptEnabled) {
-                "JavaScript activé"
-            } else {
-                "JavaScript désactivé"
-            },
+            if (javaScriptEnabled) "JavaScript activé" else "JavaScript désactivé",
             Toast.LENGTH_SHORT
         ).show()
     }
 
     private fun showDirectory() {
-
         val categories = Category.values()
-
-        val labels = categories
-            .map { it.label }
-            .toTypedArray()
+        val labels = categories.map { it.label }.toTypedArray()
 
         AlertDialog.Builder(this)
             .setTitle("Annuaire .onion")
-            .setItems(labels) { _, which ->
-                showCategory(categories[which])
-            }
-            .setNegativeButton(
-                "Annuler",
-                null
-            )
+            .setItems(labels) { _, which -> showCategory(categories[which]) }
+            .setNegativeButton("Annuler", null)
             .show()
     }
 
-    private fun showCategory(
-        category: Category
-    ) {
-
-        val links =
-            OnionDirectory.byCategory(category)
-
+    private fun showCategory(category: Category) {
+        val links = OnionDirectory.byCategory(category)
         if (links.isEmpty()) {
-
-            Toast.makeText(
-                this,
-                "Aucun lien dans cette catégorie",
-                Toast.LENGTH_SHORT
-            ).show()
-
+            Toast.makeText(this, "Aucun lien dans cette catégorie", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val labels = links
-            .map {
-                "${it.name} — ${it.description}"
-            }
-            .toTypedArray()
+        val labels = links.map { "${it.name} — ${it.description}" }.toTypedArray()
 
         AlertDialog.Builder(this)
             .setTitle(category.label)
-            .setItems(labels) { _, which ->
-                confirmNavigation(links[which])
-            }
-            .setNegativeButton(
-                "Retour",
-                null
-            )
+            .setItems(labels) { _, which -> confirmNavigation(links[which]) }
+            .setNegativeButton("Retour", null)
             .show()
     }
 
-    private fun confirmNavigation(
-        link: OnionLink
-    ) {
-
+    private fun confirmNavigation(link: OnionLink) {
         AlertDialog.Builder(this)
             .setTitle(link.name)
             .setMessage(
-                "${link.description}\n\n" +
-                    "${link.url}\n\n" +
-                    "⚠️ Void-Linux ne contrôle pas le contenu de ce site."
+                "${link.description}\n\n${link.url}\n\n" +
+                "⚠️ Void-Linux ne contrôle pas le contenu de ce site."
             )
-            .setPositiveButton(
-                "Ouvrir"
-            ) { _, _ ->
-                navigate(link.url)
-            }
-            .setNegativeButton(
-                "Annuler",
-                null
-            )
+            .setPositiveButton("Ouvrir") { _, _ -> navigate(link.url) }
+            .setNegativeButton("Annuler", null)
             .show()
     }
 
-    private fun navigate(
-        input: String
-    ) {
-
+    private fun navigate(input: String) {
         val url = normalizeUrl(input)
-
-        if (
-            !url.startsWith("http://") &&
-            !url.startsWith("https://")
-        ) {
-
-            Toast.makeText(
-                this,
-                "URL non autorisée",
-                Toast.LENGTH_SHORT
-            ).show()
-
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            Toast.makeText(this, "URL non autorisée", Toast.LENGTH_SHORT).show()
             return
         }
-
         webView.loadUrl(url)
     }
 
-    private fun normalizeUrl(
-        input: String
-    ): String {
-
+    private fun normalizeUrl(input: String): String {
         val trimmed = input.trim()
-
         return when {
-
-            trimmed.startsWith("http://") ||
-                trimmed.startsWith("https://") -> {
-                trimmed
-            }
-
-            trimmed.endsWith(".onion") -> {
-                "http://$trimmed"
-            }
-
-            trimmed.contains(".") -> {
-                "https://$trimmed"
-            }
-
-            else -> {
-                "https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/?q=$trimmed"
-            }
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            trimmed.endsWith(".onion") -> "http://$trimmed"
+            trimmed.contains(".") -> "https://$trimmed"
+            else -> "https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/?q=$trimmed"
         }
     }
 
     override fun onDestroy() {
-
-        webView.stopLoading()
-        webView.webChromeClient = null
-        webView.webViewClient = null
         webView.destroy()
-
         super.onDestroy()
     }
 }
