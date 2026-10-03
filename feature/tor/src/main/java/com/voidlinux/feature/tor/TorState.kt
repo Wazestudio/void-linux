@@ -2,10 +2,10 @@ package com.voidlinux.feature.tor
 
 sealed class TorState {
 
-    /** Orbot n'est pas installé sur l'appareil */
+    /** Orbot n'est pas installé */
     object OrbotMissing : TorState()
 
-    /** Tor est arrêté */
+    /** Orbot est installé mais Tor est arrêté */
     object Stopped : TorState()
 
     /** Tor est en cours de démarrage */
