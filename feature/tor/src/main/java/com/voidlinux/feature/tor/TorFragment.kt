@@ -33,7 +33,6 @@ class TorFragment : Fragment() {
 
         binding.startTor.setOnClickListener { viewModel.startTor() }
         binding.stopTor.setOnClickListener { viewModel.stopTor() }
-        binding.installOrbot.setOnClickListener { openOrbotInstall() }
         binding.openBrowser.setOnClickListener {
             startActivity(Intent(requireContext(), OnionBrowserActivity::class.java))
         }
@@ -41,28 +40,22 @@ class TorFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 binding.torStatus.text = state.statusMessage
-                binding.startTor.isEnabled = state.orbotInstalled && !state.torRunning
-                binding.stopTor.isEnabled = state.torRunning
-                binding.installOrbot.visibility =
-                    if (state.orbotInstalled) View.GONE else View.VISIBLE
-                binding.openBrowser.isEnabled = state.torRunning
+                binding.startTor.isEnabled = !state.running && !state.starting
+                binding.stopTor.isEnabled = state.running
+                binding.openBrowser.isEnabled = state.running
+
+                if (state.starting) {
+                    binding.progressBar.visibility = View.VISIBLE
+                    binding.progressBar.progress = state.progress
+                } else {
+                    binding.progressBar.visibility = View.GONE
+                }
 
                 state.errorMessage?.let { msg ->
                     Components.showSnackLong(binding.root, msg)
                     viewModel.clearError()
                 }
             }
-        }
-    }
-
-    private fun openOrbotInstall() {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                data = android.net.Uri.parse("https://f-droid.org/packages/org.torproject.android/")
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Components.showSnackLong(binding.root, "Impossible d'ouvrir le navigateur")
         }
     }
 
