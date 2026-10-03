@@ -1,15 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Autorise le trafic HTTP vers le proxy Tor local -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
     </domain-config>
-
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">onion</domain>
-    </domain-config>
-
-    <!-- Bloque le cleartext pour le reste par défaut -->
     <base-config cleartextTrafficPermitted="false" />
 </network-security-config>
