@@ -98,8 +98,8 @@ TALLOC_LIBRARY="$(find "$TERMUX_PREFIX/lib" -type f -name 'libtalloc.so.*' -prin
 SHMEM_LIBRARY="$(find "$TERMUX_PREFIX/lib" -type f -name 'libandroid-shmem.so*' -print -quit)"
 
 for required in "$PROOT_BINARY" "$PROOT_LOADER" "$TALLOC_LIBRARY" "$SHMEM_LIBRARY"; do
-    if [[ -z "$required" || ! -f "$required" ]]; then
-        echo "Required file missing or empty from Termux packages structure." >&2
+    if [[ -z "$required" || ! -s "$required" ]]; then
+        echo "Required file missing or empty from Termux packages structure: $required" >&2
         exit 1
     fi
 done
