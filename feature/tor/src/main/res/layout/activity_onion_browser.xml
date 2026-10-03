@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -35,6 +36,15 @@
             android:textColor="@color/void_text"
             android:textColorHint="@color/void_text_dim"
             android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/toggleJsButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="@dimen/space_xs"
+            android:background="?android:attr/selectableItemBackground"
+            android:src="@android:drawable/ic_menu_manage"
+            android:contentDescription="JavaScript" />
     </LinearLayout>
 
     <ProgressBar
@@ -45,11 +55,26 @@
         android:max="100"
         android:progressTint="@color/void_accent" />
 
-    <WebView
-        android:id="@+id/webView"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@color/void_background" />
+        android:layout_weight="1">
 
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/void_background" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/directoryButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:src="@android:drawable/ic_menu_search"
+            android:contentDescription="Annuaire .onion"
+            app:backgroundTint="@color/void_accent"
+            app:tint="@color/void_background" />
+    </FrameLayout>
 </LinearLayout>
