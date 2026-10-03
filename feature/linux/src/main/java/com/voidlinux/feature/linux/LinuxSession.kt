@@ -2,7 +2,7 @@ package com.voidlinux.feature.linux
 
 import android.content.Context
 import com.voidlinux.core.common.Constants
-import com.voidlinux.core.native.NativeBridge
+import com.voidlinux.core_native.NativeBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
