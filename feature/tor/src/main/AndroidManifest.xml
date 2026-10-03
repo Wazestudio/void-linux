@@ -18,5 +18,11 @@
             android:label="Void Tor"
             android:theme="@style/Theme.VoidLinux" />
 
+ <activity
+            android:name=".LockActivity"
+            android:exported="false"
+            android:theme="@style/Theme.VoidLinux" />
+
+
     </application>
 </manifest>
