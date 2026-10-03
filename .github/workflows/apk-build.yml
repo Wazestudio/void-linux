@@ -93,6 +93,10 @@ jobs:
           mkdir -p "$SOURCE_DIR"
           mkdir -p "$TARGET_DIR"
 
+          # Supprime l'ancien nom de loader afin d'éviter qu'un runtime obsolète
+          # reste dans l'APK lorsque le workspace est réutilisé par le cache.
+          rm -f "$SOURCE_DIR/libproot-loader.so" "$TARGET_DIR/libproot-loader.so"
+
           echo "Lancement de build-proot.sh..."
 
           set +e
@@ -134,18 +138,28 @@ jobs:
 
           echo "Vérification finale..."
 
+          case "$ABI" in
+            arm64-v8a) ELF_PATTERN='ELF 64-bit.*ARM aarch64' ;;
+            armeabi-v7a) ELF_PATTERN='ELF 32-bit.*ARM' ;;
+            *) echo "::error::ABI non supporté : $ABI"; exit 1 ;;
+          esac
+
           for lib in "${REQUIRED_LIBS[@]}"; do
-            if [ ! -s "$TARGET_DIR/$lib" ]; then
-              echo "::error::Bibliothèque absente après copie : $TARGET_DIR/$lib"
+            FILE="$TARGET_DIR/$lib"
+
+            if [ ! -f "$FILE" ] || [ ! -s "$FILE" ]; then
+              echo "::error::Bibliothèque absente ou vide : $FILE"
               exit 1
             fi
 
-            if [ ! -x "$TARGET_DIR/$lib" ]; then
-              echo "::error::Runtime PRoot non exécutable : $TARGET_DIR/$lib"
+            INFO="$(file "$FILE")"
+            if ! echo "$INFO" | grep -Eq "$ELF_PATTERN"; then
+              echo "::error::Architecture ELF incorrecte pour $ABI : $FILE"
+              echo "$INFO"
               exit 1
             fi
 
-            echo "OK : $TARGET_DIR/$lib"
+            echo "OK : $FILE — $INFO"
           done
 
           echo "Runtime PRoot $ABI prêt."
