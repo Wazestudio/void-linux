@@ -1,11 +1,10 @@
-package com.voidlinux.core.native
+package com.voidlinux.core_native
 
 object NativeBridge {
 
     init {
         System.loadLibrary("voidlinux_jni")
     }
-
 
     // --- PTY ---
 
