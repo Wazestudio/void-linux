@@ -23,6 +23,7 @@ class TorManager(private val context: Context) {
     val state: StateFlow<TorState> = _state
 
     private val ORBOT_PACKAGE = "org.torproject.android"
+    private val ORBOT_PACKAGE_DEBUG = "org.torproject.android.debug"
     private val ACTION_START = "org.torproject.android.intent.action.START"
     private val ACTION_STOP = "org.torproject.android.intent.action.STOP"
     private val ORBOT_DOWNLOAD_URL =
@@ -40,43 +41,41 @@ class TorManager(private val context: Context) {
         }
     }
 
-    // ---- Détection Orbot ----
+    // =========================================================
+    // DÉTECTION ORBOT (Android 11+ compatible)
+    // =========================================================
 
     /**
-     * Vérifie si Orbot est installé de façon fiable.
-     * Combine plusieurs méthodes pour éviter les faux négatifs.
+     * Vérifie si Orbot est installé.
+     * Teste plusieurs variantes de package (release + debug).
+     * Nécessite <queries> dans AndroidManifest pour Android 11+.
      */
     fun isOrbotInstalled(): Boolean {
-        // Méthode 1 : via PackageManager (la plus fiable)
-        if (isPackageInstalled(ORBOT_PACKAGE)) return true
-
-        // Méthode 2 : variantes de package connues
-        val variants = listOf(
-            "org.torproject.android",
-            "org.torproject.android.debug"
-        )
-        return variants.any { isPackageInstalled(it) }
+        return isPackageInstalled(ORBOT_PACKAGE) ||
+               isPackageInstalled(ORBOT_PACKAGE_DEBUG)
     }
 
     /**
-     * Vérifie si un package est installé.
+     * Vérifie si un package est installé avec gestion API 33+.
      */
     private fun isPackageInstalled(packageName: String): Boolean {
         return try {
+            val pm = context.packageManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(
+                pm.getPackageInfo(
                     packageName,
                     PackageManager.PackageInfoFlags.of(0)
                 )
             } else {
                 @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(packageName, 0)
+                pm.getPackageInfo(packageName, 0)
             }
+            Logger.d("Package détecté : $packageName")
             true
         } catch (e: PackageManager.NameNotFoundException) {
             false
         } catch (e: Exception) {
-            Logger.e("Erreur vérification package $packageName", e)
+            Logger.e("Erreur détection package $packageName", e)
             false
         }
     }
@@ -85,28 +84,29 @@ class TorManager(private val context: Context) {
      * Retourne la version d'Orbot si installé, sinon null.
      */
     fun getOrbotVersion(): String? {
-        return try {
-            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(
-                    ORBOT_PACKAGE,
-                    PackageManager.PackageInfoFlags.of(0)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(ORBOT_PACKAGE, 0)
-            }
-            info.versionName
-        } catch (e: Exception) {
-            null
+        val packages = listOf(ORBOT_PACKAGE, ORBOT_PACKAGE_DEBUG)
+        for (pkg in packages) {
+            try {
+                val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.packageManager.getPackageInfo(
+                        pkg,
+                        PackageManager.PackageInfoFlags.of(0)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(pkg, 0)
+                }
+                return info.versionName
+            } catch (_: Exception) { }
         }
+        return null
     }
 
     /**
-     * Vérifie si Orbot est installé ET que sa version est récente.
+     * Vérifie si Orbot est installé ET en version 16+.
      */
     fun isOrbotInstalledAndRecent(): Boolean {
         val version = getOrbotVersion() ?: return false
-        // Orbot 16.x minimum recommandé pour l'API Intent moderne
         return try {
             val major = version.substringBefore('.').toIntOrNull() ?: 0
             major >= 16
@@ -127,7 +127,9 @@ class TorManager(private val context: Context) {
         }
     }
 
-    // ---- Contrôle Tor ----
+    // =========================================================
+    // CONTRÔLE TOR
+    // =========================================================
 
     fun requestStart() {
         if (!isOrbotInstalled()) {
@@ -167,8 +169,13 @@ class TorManager(private val context: Context) {
 
     fun getSocksPort(): Int = 9050
 
-    // ---- Téléchargement + Installation ----
+    // =========================================================
+    // TÉLÉCHARGEMENT + INSTALLATION
+    // =========================================================
 
+    /**
+     * Télécharge l'APK Orbot puis déclenche son installation.
+     */
     fun downloadAndInstallOrbot() {
         if (!canInstallPackages()) {
             openInstallPermissionSettings()
@@ -260,7 +267,9 @@ class TorManager(private val context: Context) {
         }
     }
 
-    // ---- Receiver DownloadManager ----
+    // =========================================================
+    // RECEIVER DOWNLOADMANAGER
+    // =========================================================
 
     private fun registerReceiver() {
         if (receiverRegistered) return
