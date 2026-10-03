@@ -9,6 +9,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.nio.charset.CharsetDecoder
+import java.nio.charset.CodingErrorAction
 
 class LinuxSession(
     private val context: Context,
@@ -145,20 +147,32 @@ class LinuxSession(
             onOutput("Kali Linux démarré (PRoot, sans privilèges root Android).\r\n")
 
             scope.launch {
-                while (true) {
-                    val bytes = NativeBridge.readFromPty(master, 4096) ?: break
-                    onOutput(String(bytes, StandardCharsets.UTF_8))
-                }
-                val exitCode = NativeBridge.waitForProcess(pid)
-                synchronized(this@LinuxSession) {
-                    if (masterFd == master) masterFd = -1
-                    if (processId == pid) processId = -1
-                    running = false
-                    NativeBridge.closePty(master)
-                }
-                if (!stopping) {
-                    if (exitCode != 0) onError("Le processus Linux s'est arrêté (code $exitCode)")
-                    onExit(exitCode)
+                val decoder: CharsetDecoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPLACE)
+                    .onUnmappableCharacter(CodingErrorAction.REPLACE)
+
+                try {
+                    while (true) {
+                        val bytes = NativeBridge.readFromPty(master, 16 * 1024) ?: break
+                        if (bytes.isNotEmpty()) {
+                            val text = decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+                            if (text.isNotEmpty()) onOutput(text)
+                        }
+                    }
+                } finally {
+                    val exitCode = NativeBridge.waitForProcess(pid)
+                    synchronized(this@LinuxSession) {
+                        if (masterFd == master) masterFd = -1
+                        if (processId == pid) processId = -1
+                        running = false
+                        NativeBridge.closePty(master)
+                    }
+                    if (!stopping) {
+                        if (exitCode != 0) {
+                            onError("Le processus Linux s'est arrêté (code $exitCode)")
+                        }
+                        onExit(exitCode)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -211,7 +225,14 @@ class LinuxSession(
     fun stop() {
         stopping = true
         running = false
-        if (processId > 0) NativeBridge.killProcess(processId)
+
+        val pid = processId
+        val fd = masterFd
+        processId = -1
+        masterFd = -1
+
+        if (pid > 0) NativeBridge.killProcess(pid)
+        if (fd >= 0) NativeBridge.closePty(fd)
     }
 
     @Synchronized
