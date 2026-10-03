@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 data class TorUiState(
     val orbotInstalled: Boolean = false,
+    val orbotVersion: String? = null,
+    val orbotOutdated: Boolean = false,
     val torRunning: Boolean = false,
     val starting: Boolean = false,
     val progress: Int = 0,
@@ -27,15 +29,21 @@ class TorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() {
         val installed = manager.isOrbotInstalled()
+        val version = if (installed) manager.getOrbotVersion() else null
+        val outdated = installed && !manager.isOrbotInstalledAndRecent()
         val running = installed && manager.isTorRunning()
+
         _uiState.value = _uiState.value.copy(
             orbotInstalled = installed,
+            orbotVersion = version,
+            orbotOutdated = outdated,
             torRunning = running,
             starting = false,
             statusMessage = when {
                 !installed -> "Orbot non installé"
+                outdated -> "Orbot obsolète (v$version) — mise à jour recommandée"
                 running -> "Tor actif ✅"
-                else -> "Tor arrêté"
+                else -> "Orbot v$version prêt"
             },
             errorMessage = null
         )
@@ -43,7 +51,7 @@ class TorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startTor() {
         if (!manager.isOrbotInstalled()) {
-            manager.promptInstall()
+            installOrbot()
             return
         }
         manager.requestStart()
@@ -62,7 +70,6 @@ class TorViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** À appeler quand l'utilisateur confirme que Tor tourne dans Orbot */
     fun confirmTorRunning() {
         manager.markRunning()
         _uiState.value = _uiState.value.copy(
@@ -73,7 +80,11 @@ class TorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun installOrbot() {
-        manager.promptInstall()
+        _uiState.value = _uiState.value.copy(
+            starting = true,
+            statusMessage = "Téléchargement d'Orbot…"
+        )
+        manager.downloadAndInstallOrbot()
     }
 
     fun clearError() {
