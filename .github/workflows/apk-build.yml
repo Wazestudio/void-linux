@@ -140,6 +140,11 @@ jobs:
               exit 1
             fi
 
+            if [ ! -x "$TARGET_DIR/$lib" ]; then
+              echo "::error::Runtime PRoot non exécutable : $TARGET_DIR/$lib"
+              exit 1
+            fi
+
             echo "OK : $TARGET_DIR/$lib"
           done
 
