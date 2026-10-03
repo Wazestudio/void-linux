@@ -20,7 +20,6 @@ jobs:
           - android-abi: armeabi-v7a
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -94,6 +93,8 @@ jobs:
           mkdir -p "$SOURCE_DIR"
           mkdir -p "$TARGET_DIR"
 
+          echo "Lancement de build-proot.sh..."
+
           set +e
           bash tools/build-proot.sh "$ABI"
           PROOT_STATUS=$?
@@ -113,5 +114,317 @@ jobs:
           for lib in "${REQUIRED_LIBS[@]}"; do
             if [ ! -s "$SOURCE_DIR/$lib" ]; then
               echo "::error::Bibliothèque PRoot manquante : $SOURCE_DIR/$lib"
+              exit 1
+            fi
 
-             
+            echo "OK : $SOURCE_DIR/$lib"
+          done
+
+          if [ "$PROOT_STATUS" -ne 0 ]; then
+            echo "::error::build-proot.sh a échoué avec le code $PROOT_STATUS."
+            exit 1
+          fi
+
+          echo "Copie des bibliothèques vers $TARGET_DIR..."
+
+          for lib in "${REQUIRED_LIBS[@]}"; do
+            cp -f "$SOURCE_DIR/$lib" "$TARGET_DIR/$lib"
+            echo "Copié : $lib"
+          done
+
+          echo "Vérification finale..."
+
+          for lib in "${REQUIRED_LIBS[@]}"; do
+            if [ ! -s "$TARGET_DIR/$lib" ]; then
+              echo "::error::Bibliothèque absente après copie : $TARGET_DIR/$lib"
+              exit 1
+            fi
+
+            echo "OK : $TARGET_DIR/$lib"
+          done
+
+          echo "Runtime PRoot $ABI prêt."
+
+      - name: Configure Android release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+        run: |
+          set -euo pipefail
+
+          echo "Vérification des secrets de signature..."
+
+          for name in \
+            KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Le secret GitHub $name est vide ou manquant."
+              exit 1
+            fi
+          done
+
+          KEYSTORE="$RUNNER_TEMP/void-linux-release.jks"
+
+          echo "Décodage du keystore..."
+
+          if ! printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"; then
+            echo "::error::Impossible de décoder KEYSTORE_BASE64."
+            exit 1
+          fi
+
+          chmod 600 "$KEYSTORE"
+
+          if [ ! -s "$KEYSTORE" ]; then
+            echo "::error::Le keystore décodé est vide."
+            exit 1
+          fi
+
+          echo "Taille du keystore : $(stat -c%s "$KEYSTORE") octets"
+
+          echo "Vérification du keystore..."
+
+          if ! keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            >/dev/null 2>&1
+          then
+            echo "::error::ANDROID_KEYSTORE_PASSWORD est incorrect ou le keystore est invalide."
+            exit 1
+          fi
+
+          echo "Keystore valide."
+
+          echo "Vérification de l'alias..."
+
+          if ! keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            >/dev/null 2>&1
+          then
+            echo "::error::ANDROID_KEY_ALIAS est incorrect ou cet alias n'existe pas dans le keystore."
+            exit 1
+          fi
+
+          echo "Alias valide."
+
+          {
+            echo "RELEASE_STORE_FILE=$KEYSTORE"
+            echo "RELEASE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+          echo "Keystore release validé."
+
+      - name: Validate Gradle project structure
+        run: |
+          set -euo pipefail
+
+          echo "Vérification de la structure du projet..."
+
+          if [ ! -f settings.gradle.kts ]; then
+            echo "::error::settings.gradle.kts introuvable."
+            exit 1
+          fi
+
+          if [ ! -f feature/linux/build.gradle.kts ]; then
+            echo "::error::feature/linux/build.gradle.kts introuvable."
+            exit 1
+          fi
+
+          if [ ! -f native/CMakeLists.txt ]; then
+            echo "::error::native/CMakeLists.txt introuvable."
+            exit 1
+          fi
+
+          if [ ! -f tools/build-proot.sh ]; then
+            echo "::error::tools/build-proot.sh introuvable."
+            exit 1
+          fi
+
+          echo "Fichiers principaux présents."
+
+          if grep -n 'library/proot-engin/proot-engine' settings.gradle.kts; then
+            echo "::warning::Une ancienne référence PRoot a été trouvée dans settings.gradle.kts."
+          else
+            echo "Aucune ancienne référence PRoot détectée."
+          fi
+
+          echo "Structure Gradle valide."
+
+      - name: Verify requested ABI
+        run: |
+          set -euo pipefail
+
+          ABI="${{ matrix.android-abi }}"
+
+          case "$ABI" in
+            arm64-v8a|armeabi-v7a)
+              ;;
+            *)
+              echo "::error::ABI non supporté : $ABI"
+              exit 1
+              ;;
+          esac
+
+          JNI_DIR="app/src/main/jniLibs/$ABI"
+
+          REQUIRED_LIBS=(
+            "libproot.so"
+            "libproot_loader.so"
+            "libtalloc.so"
+            "libandroid-shmem.so"
+          )
+
+          for lib in "${REQUIRED_LIBS[@]}"; do
+            if [ ! -s "$JNI_DIR/$lib" ]; then
+              echo "::error::Bibliothèque absente : $JNI_DIR/$lib"
+              exit 1
+            fi
+
+            echo "ABI $ABI : $lib OK"
+          done
+
+      - name: Validate Android XML resources
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import pathlib
+          import xml.etree.ElementTree as ET
+          import sys
+
+          roots = [
+              pathlib.Path("app/src/main/res"),
+              pathlib.Path("feature"),
+              pathlib.Path("core"),
+              pathlib.Path("native"),
+          ]
+
+          errors = 0
+
+          for root in roots:
+              if not root.exists():
+                  continue
+
+              for path in root.rglob("values/*.xml"):
+
+                  try:
+                      ET.parse(path)
+                  except Exception as exc:
+                      print(
+                          f"::error file={path}::"
+                          f"XML invalide: {exc}"
+                      )
+                      errors += 1
+
+                  try:
+                      content = path.read_text(
+                          encoding="utf-8",
+                          errors="strict"
+                      )
+                  except Exception as exc:
+                      print(
+                          f"::error file={path}::"
+                          f"Impossible de lire le fichier: {exc}"
+                      )
+                      errors += 1
+                      continue
+
+                  if "\\'" in content:
+                      print(
+                          f"::warning file={path}::"
+                          "Séquence \\' détectée dans une ressource XML."
+                      )
+
+          if errors:
+              print(f"Nombre d'erreurs XML : {errors}")
+              sys.exit(1)
+
+          print("Validation XML des ressources terminée.")
+          PY
+
+      - name: Clean Gradle
+        run: |
+          set -euo pipefail
+
+          gradle clean \
+            --no-daemon \
+            --stacktrace
+
+      - name: Build APK (Release)
+        run: |
+          set -euo pipefail
+
+          gradle assembleRelease \
+            -PtargetAbi="${{ matrix.android-abi }}" \
+            -x lint \
+            -x lintVitalRelease \
+            --stacktrace \
+            --no-daemon \
+            --warning-mode all \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" \
+            -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Verify generated APK
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+
+          apks=(app/build/outputs/apk/release/*.apk)
+
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::Aucun APK release généré."
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            echo "APK trouvé : $apk"
+
+            if [ ! -s "$apk" ]; then
+              echo "::error::APK vide : $apk"
+              exit 1
+            fi
+
+            echo "Taille : $(du -h "$apk" | cut -f1)"
+          done
+
+      - name: Verify release APK signature (${{ matrix.android-abi }})
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+
+          apks=(app/build/outputs/apk/release/*.apk)
+
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::Aucun APK release à vérifier."
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            echo "Vérification de la signature : $apk"
+
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" \
+              verify \
+              --verbose \
+              "$apk"
+          done
+
+          echo "Signature APK valide."
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: void-linux-release-${{ matrix.android-abi }}
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 7
+          if-no-files-found: error
