@@ -1,20 +1,22 @@
 package com.voidlinux.feature.tor
 
+import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.voidlinux.core.common.Logger
-import java.io.ByteArrayInputStream
-import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
-import java.util.Locale
+import java.net.URLConnection
 
 /**
- * Routes HTTP(S) requests through Orbot's SOCKS proxy and fails closed if it is unavailable.
+ * WebViewClient qui force chaque requête à passer par le proxy SOCKS de Tor.
+ *
+ * Le WebView Android ne supporte pas nativement le proxy SOCKS par requête.
+ * La technique consiste à intercepter chaque requête, ouvrir manuellement
+ * la connexion via Tor (127.0.0.1:9050), et retourner la réponse au WebView.
  */
 class TorWebViewClient(
     private val socksPort: Int = 9050
@@ -24,115 +26,81 @@ class TorWebViewClient(
         view: WebView,
         request: WebResourceRequest
     ): WebResourceResponse? {
-        val scheme = request.url.scheme?.lowercase(Locale.ROOT)
-        if (scheme != "http" && scheme != "https") return null
+        val url = request.url.toString()
 
-        if (!request.method.equals("GET", ignoreCase = true)) {
-            return errorResponse(501, "Not Implemented", "Request method is not supported")
-        }
+        // Autorise uniquement les schémas http/https
+        if (!url.startsWith("http")) return null
 
         return try {
-            fetchViaTor(request)
-        } catch (e: IOException) {
-            Logger.e("Tor proxy request failed for ${request.url.host}", e)
-            errorResponse(502, "Bad Gateway", "Tor proxy unavailable; request blocked")
+            fetchViaTor(url, request)
+        } catch (e: Exception) {
+            Logger.e("Erreur Tor WebView : $url", e)
+            null
         }
     }
 
-    private fun fetchViaTor(request: WebResourceRequest): WebResourceResponse {
+    private fun fetchViaTor(
+        url: String,
+        request: WebResourceRequest
+    ): WebResourceResponse? {
+
         val proxy = Proxy(
             Proxy.Type.SOCKS,
             InetSocketAddress("127.0.0.1", socksPort)
         )
-        val connection = URL(request.url.toString()).openConnection(proxy) as HttpURLConnection
-        connection.connectTimeout = CONNECT_TIMEOUT_MS
-        connection.readTimeout = READ_TIMEOUT_MS
-        connection.useCaches = false
 
-        request.requestHeaders.forEach { (name, value) ->
-            if (name.lowercase(Locale.ROOT) !in HOP_BY_HOP_REQUEST_HEADERS) {
-                connection.setRequestProperty(name, value)
+        val connection = URL(url).openConnection(proxy) as URLConnection
+        connection.connectTimeout = 30_000
+        connection.readTimeout = 30_000
+        connection.setRequestProperty("User-Agent", USER_AGENT)
+
+        // Recopie des en-têtes de la requête
+        request.requestHeaders.forEach { (key, value) ->
+            connection.setRequestProperty(key, value)
+        }
+
+        connection.connect()
+
+        val contentType = connection.contentType ?: "text/html"
+        val encoding = connection.contentEncoding ?: "utf-8"
+        val (mime, charset) = parseContentType(contentType, encoding)
+
+        val httpConnection = connection as? java.net.HttpURLConnection
+        val statusCode = httpConnection?.responseCode ?: 200
+        val reasonPhrase = httpConnection?.responseMessage ?: "OK"
+
+        val headers = mutableMapOf<String, String>()
+        connection.headerFields.forEach { (key, value) ->
+            if (key != null && value.isNotEmpty()) {
+                headers[key] = value.first()
             }
         }
-        connection.setRequestProperty("Accept-Encoding", "identity")
-
-        val statusCode = connection.responseCode
-        val contentType = connection.contentType ?: "text/plain; charset=utf-8"
-        val (mimeType, encoding) = parseContentType(contentType)
-        val headers = connection.headerFields
-            .filterKeys { key ->
-                key != null && key.lowercase(Locale.ROOT) !in HOP_BY_HOP_RESPONSE_HEADERS
-            }
-            .mapNotNull { (key, values) ->
-                key?.let { header -> values.firstOrNull()?.let { header to it } }
-            }
-            .toMap()
-        val body = if (statusCode >= HttpURLConnection.HTTP_BAD_REQUEST) {
-            connection.errorStream
-        } else {
-            connection.inputStream
-        } ?: ByteArrayInputStream(ByteArray(0))
 
         return WebResourceResponse(
-            mimeType,
-            encoding,
+            mime,
+            charset,
             statusCode,
-            connection.responseMessage ?: "HTTP response",
+            reasonPhrase,
             headers,
-            body
+            connection.inputStream
         )
     }
 
-    private fun parseContentType(contentType: String): Pair<String, String> {
-        val mimeType = contentType.substringBefore(';').trim().ifEmpty { "text/plain" }
-        val charset = CHARSET_PATTERN.find(contentType)
-            ?.groupValues
-            ?.getOrNull(1)
+    private fun parseContentType(
+        contentType: String,
+        fallback: String
+    ): Pair<String, String> {
+        val parts = contentType.split(";")
+        val mime = parts.getOrNull(0)?.trim() ?: "text/html"
+        val charset = parts.firstOrNull { it.contains("charset") }
+            ?.substringAfter("=")
             ?.trim()
-            ?.trim('"', '\'')
-            ?.ifEmpty { null }
-            ?: "utf-8"
-        return mimeType to charset
+            ?: fallback
+        return mime to charset
     }
-
-    private fun errorResponse(
-        statusCode: Int,
-        reason: String,
-        message: String
-    ) = WebResourceResponse(
-        "text/plain",
-        "utf-8",
-        statusCode,
-        reason,
-        mapOf("Cache-Control" to "no-store"),
-        ByteArrayInputStream(message.toByteArray(Charsets.UTF_8))
-    )
 
     companion object {
-        private const val CONNECT_TIMEOUT_MS = 15_000
-        private const val READ_TIMEOUT_MS = 30_000
-        private val CHARSET_PATTERN = Regex("charset\\s*=\\s*([^;]+)", RegexOption.IGNORE_CASE)
-        private val HOP_BY_HOP_REQUEST_HEADERS = setOf(
-            "connection",
-            "content-length",
-            "expect",
-            "host",
-            "proxy-authorization",
-            "proxy-connection",
-            "transfer-encoding",
-            "upgrade"
-        )
-        private val HOP_BY_HOP_RESPONSE_HEADERS = setOf(
-            "connection",
-            "content-encoding",
-            "content-length",
-            "keep-alive",
-            "proxy-authenticate",
-            "proxy-authorization",
-            "te",
-            "trailer",
-            "transfer-encoding",
-            "upgrade"
-        )
+        const val USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; rv:115.0) Gecko/20100101 Firefox/115.0"
     }
 }
