@@ -62,17 +62,31 @@ Java_com_voidlinux_core_native_NativeBridge_execInPty(JNIEnv *env, jclass clazz,
 
     pid_t pid = fork();
     if (pid == 0) {
-        if (setsid() < 0 ||
-            ioctl(slave_fd, TIOCSCTTY, 0) < 0 ||
-            dup2(slave_fd, STDIN_FILENO) < 0 ||
+        if (setsid() < 0) {
+            dprintf(slave_fd, "\r\n[terminal] setsid failed: %s\r\n", strerror(errno));
+            _exit(126);
+        }
+
+        if (ioctl(slave_fd, TIOCSCTTY, 0) < 0) {
+            dprintf(slave_fd, "\r\n[terminal] TIOCSCTTY failed: %s\r\n", strerror(errno));
+            _exit(126);
+        }
+
+        if (dup2(slave_fd, STDIN_FILENO) < 0 ||
             dup2(slave_fd, STDOUT_FILENO) < 0 ||
             dup2(slave_fd, STDERR_FILENO) < 0) {
+            dprintf(slave_fd, "\r\n[terminal] dup2 failed: %s\r\n", strerror(errno));
             _exit(126);
         }
         close(master_fd);
         if (slave_fd > STDERR_FILENO) close(slave_fd);
-        if (chdir(cwd) < 0) _exit(126);
+        if (chdir(cwd) < 0) {
+            dprintf(STDERR_FILENO, "\r\n[terminal] chdir failed: %s\r\n", strerror(errno));
+            _exit(126);
+        }
+
         execve(argv[0], argv, envp);
+        dprintf(STDERR_FILENO, "\r\n[terminal] execve(%s) failed: %s\r\n", argv[0], strerror(errno));
         _exit(127);
     }
 
