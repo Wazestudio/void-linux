@@ -42,12 +42,22 @@ class TorFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 binding.torStatus.text = state.statusMessage
-                binding.startTor.isEnabled = state.orbotInstalled && !state.torRunning
-                binding.stopTor.isEnabled = state.torRunning
+
+                // Orbot non installé : bouton "Installer Orbot" visible
                 binding.installOrbot.visibility =
                     if (state.orbotInstalled) View.GONE else View.VISIBLE
+
+                // Orbot installé : boutons de contrôle visibles
+                binding.startTor.isEnabled =
+                    state.orbotInstalled && !state.torRunning && !state.starting
+                binding.stopTor.isEnabled = state.torRunning
+
+                // Confirmation manuelle après activation dans Orbot
                 binding.confirmTor.visibility =
-                    if (state.orbotInstalled && !state.torRunning) View.VISIBLE else View.GONE
+                    if (state.orbotInstalled && !state.torRunning) View.VISIBLE
+                    else View.GONE
+
+                // Navigateur .onion disponible seulement si Tor est actif
                 binding.openBrowser.isEnabled = state.torRunning
 
                 state.errorMessage?.let { msg ->
@@ -60,6 +70,7 @@ class TorFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        // Détection automatique d'Orbot à chaque retour dans le fragment
         viewModel.refresh()
     }
 
