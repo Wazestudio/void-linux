@@ -1,6 +1,5 @@
 package com.voidlinux.feature.tor
 
-import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -18,7 +17,7 @@ import java.net.URLConnection
  * La technique consiste à intercepter chaque requête, ouvrir manuellement
  * la connexion via Tor (127.0.0.1:9050), et retourner la réponse au WebView.
  */
-class TorWebViewClient(
+open class TorWebViewClient(
     private val socksPort: Int = 9050
 ) : WebViewClient() {
 
@@ -50,6 +49,7 @@ class TorWebViewClient(
         )
 
         val connection = URL(url).openConnection(proxy) as URLConnection
+
         connection.connectTimeout = 30_000
         connection.readTimeout = 30_000
         connection.setRequestProperty("User-Agent", USER_AGENT)
@@ -70,6 +70,7 @@ class TorWebViewClient(
         val reasonPhrase = httpConnection?.responseMessage ?: "OK"
 
         val headers = mutableMapOf<String, String>()
+
         connection.headerFields.forEach { (key, value) ->
             if (key != null && value.isNotEmpty()) {
                 headers[key] = value.first()
@@ -91,11 +92,18 @@ class TorWebViewClient(
         fallback: String
     ): Pair<String, String> {
         val parts = contentType.split(";")
-        val mime = parts.getOrNull(0)?.trim() ?: "text/html"
-        val charset = parts.firstOrNull { it.contains("charset") }
+
+        val mime = parts
+            .getOrNull(0)
+            ?.trim()
+            ?: "text/html"
+
+        val charset = parts
+            .firstOrNull { it.contains("charset", ignoreCase = true) }
             ?.substringAfter("=")
             ?.trim()
             ?: fallback
+
         return mime to charset
     }
 
