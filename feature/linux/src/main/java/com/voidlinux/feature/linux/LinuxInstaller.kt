@@ -684,7 +684,7 @@ class LinuxInstaller(
             )
         }
         val proot = File(host.nativeLibsDir, "libproot.so")
-        val loader = File(host.nativeLibsDir, "libproot_loader.so")
+        val loader = host.prootLoaderFile()
         if (!proot.isFile || !loader.isFile) {
             return@withContext VoidResult.Error(
                 "Moteur PRoot indisponible pour installer les outils",
@@ -705,10 +705,12 @@ class LinuxInstaller(
             "--link2symlink",
             "-0",
             "-r", rootfs.absolutePath,
+            "-w", "/root",
             "-b", "/dev",
             "-b", "/proc",
+            "-b", "/sys",
             "-b", "${host.homeDir.absolutePath}:/root",
-            "-w", "/root",
+            "-l", loader.absolutePath,
             "/usr/bin/env",
             "-i",
             "HOME=/root",
@@ -719,7 +721,7 @@ class LinuxInstaller(
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "DEBIAN_FRONTEND=noninteractive",
         ) + LinuxNetworkRoute.variables(context).map { (name, value) -> "$name=$value" } +
-            listOf("/bin/bash", "-lc", aptCommand)
+            listOf("--", "/bin/bash", "-lc", aptCommand)
 
         var process: Process? = null
         try {

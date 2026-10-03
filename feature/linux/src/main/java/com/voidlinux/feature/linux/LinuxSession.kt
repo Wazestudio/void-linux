@@ -36,27 +36,35 @@ class LinuxSession(
 
         val distro = DistroCatalog.byId(distroId)
         val rootfs = host.rootfsFor(distroId)
-        val nativeLibraries = File(context.applicationInfo.nativeLibraryDir)
+        val nativeLibraries = host.nativeLibsDir
         val proot = File(nativeLibraries, "libproot.so")
-        val missingRuntimeLibrary = listOf(
+        val loader = host.prootLoaderFile()
+        val requiredLibraries = listOf(
+            "libproot.so",
             "libproot_loader.so",
             "libtalloc.so",
             "libandroid-shmem.so"
-        ).firstOrNull { !File(nativeLibraries, it).isFile }
-        val loginShell = if (distroId == Constants.DISTRO_KALI) {
-            "/usr/local/sbin/void-kali-login"
-        } else {
-            distro?.defaultShell ?: "/bin/sh"
+        )
+        val missingRuntimeLibrary = requiredLibraries.firstOrNull {
+            if (it == "libproot_loader.so") {
+                !loader.isFile || loader.length() == 0L
+            } else {
+                !File(nativeLibraries, it).isFile || File(nativeLibraries, it).length() == 0L
+            }
         }
+
+        val loginShell = distro?.defaultShell ?: "/bin/bash"
         if (distro == null || !rootfs.isDirectory ||
-            !File(rootfs, loginShell.removePrefix("/")).isFile || !proot.isFile ||
-            missingRuntimeLibrary != null
+            !File(rootfs, loginShell.removePrefix("/")).isFile ||
+            !proot.isFile || !loader.isFile || missingRuntimeLibrary != null
         ) {
             val message = when {
                 distro == null -> "Distribution non prise en charge : $distroId"
                 !rootfs.isDirectory -> "Kali n'est pas installé"
-                !File(rootfs, loginShell.removePrefix("/")).isFile -> "Entrée shell Kali introuvable : $loginShell"
+                !File(rootfs, loginShell.removePrefix("/")).isFile ->
+                    "Shell Kali introuvable : $loginShell"
                 !proot.isFile -> "Binaire PRoot Android manquant dans l'APK"
+                !loader.isFile -> "Loader PRoot Android manquant dans l'APK"
                 else -> "Bibliothèque PRoot absente de l'APK : $missingRuntimeLibrary"
             }
             onError(message)
@@ -68,24 +76,11 @@ class LinuxSession(
         var createdSlave = -1
         try {
             val networkVariables = LinuxNetworkRoute.variables(context)
-            val guestCommand = command ?: buildList {
-                addAll(
-                    listOf(
-                        "/usr/bin/env",
-                        "-i",
-                        "HOME=/root",
-                        "USER=root",
-                        "LOGNAME=root",
-                        "TERM=xterm-256color",
-                        "LANG=C.UTF-8",
-                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                        "PS1=\\u@kali:\\w# ",
-                        "DEBIAN_FRONTEND=noninteractive"
-                    )
-                )
-                networkVariables.forEach { (name, value) -> add("$name=$value") }
-                add(loginShell)
-            }
+            val shellCommand = command ?: listOf(
+                loginShell,
+                "-i"
+            )
+
             val prootCommand = buildList {
                 add(proot.absolutePath)
                 addAll(
@@ -93,37 +88,61 @@ class LinuxSession(
                         "--link2symlink",
                         "-0",
                         "-r", rootfs.absolutePath,
+                        "-w", "/root",
                         "-b", "/dev",
                         "-b", "/proc",
+                        "-b", "/sys",
                         "-b", "${host.homeDir.absolutePath}:/root",
-                        "-w", "/root"
+                        "-l", loader.absolutePath
                     )
                 )
-                addAll(guestCommand)
+                add("--")
+                addAll(
+                    listOf(
+                        "/usr/bin/env",
+                        "-i",
+                        "HOME=/root",
+                        "USER=root",
+                        "LOGNAME=root",
+                        "SHELL=$loginShell",
+                        "TERM=xterm-256color",
+                        "LANG=C.UTF-8",
+                        "LC_ALL=C.UTF-8",
+                        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        "PS1=\\u@kali:\\w# "
+                    )
+                )
+                networkVariables.forEach { (name, value) -> add("$name=$value") }
+                addAll(shellCommand)
             }
+
             val pty = NativeBridge.createPty(columns, rows)
                 ?: throw IllegalStateException("Impossible de créer le pseudo-terminal")
-            if (pty.size < 2) throw IllegalStateException("Descripteurs PTY invalides")
+            if (pty.size < 2 || pty[0] < 0 || pty[1] < 0) {
+                throw IllegalStateException("Descripteurs PTY invalides")
+            }
 
             val master = pty[0]
             val slave = pty[1]
             createdMaster = master
             createdSlave = slave
+
             val prootTemp = File(host.tmpDir, "proot-tmp").apply {
-                if (!exists() && !mkdirs()) throw IllegalStateException("Impossible de créer le répertoire temporaire PRoot")
+                if (!exists() && !mkdirs()) {
+                    throw IllegalStateException("Impossible de créer le répertoire temporaire PRoot")
+                }
                 setReadable(true, true)
                 setWritable(true, true)
                 setExecutable(true, true)
             }
+
             val environment = System.getenv().toMutableMap().apply {
-                put("LD_LIBRARY_PATH", context.applicationInfo.nativeLibraryDir)
-                put(
-                    "PROOT_LOADER",
-                    File(context.applicationInfo.nativeLibraryDir, "libproot_loader.so").absolutePath
-                )
+                put("LD_LIBRARY_PATH", nativeLibraries.absolutePath)
+                put("PROOT_LOADER", loader.absolutePath)
                 put("PROOT_TMP_DIR", prootTemp.absolutePath)
                 putAll(networkVariables)
             }
+
             val pid = NativeBridge.execInPty(
                 master,
                 slave,
@@ -131,8 +150,10 @@ class LinuxSession(
                 environment.map { (key, value) -> "$key=$value" }.toTypedArray(),
                 host.homeDir.absolutePath
             )
+
             NativeBridge.closePty(slave)
             createdSlave = -1
+
             if (pid < 0) {
                 NativeBridge.closePty(master)
                 createdMaster = -1
@@ -144,10 +165,10 @@ class LinuxSession(
             processId = pid
             stopping = false
             running = true
-            onOutput("Kali Linux démarré (PRoot, sans privilèges root Android).\r\n")
+            onOutput("Kali Linux démarré.\r\n")
 
             scope.launch {
-                val decoder: CharsetDecoder = StandardCharsets.UTF_8.newDecoder()
+                val decoder = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPLACE)
                     .onUnmappableCharacter(CodingErrorAction.REPLACE)
 
@@ -175,24 +196,25 @@ class LinuxSession(
                     }
                 }
             }
-        } catch (e: Exception) {
-            if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
-            if (createdMaster >= 0) NativeBridge.closePty(createdMaster)
-            masterFd = -1
-            if (processId > 0) {
-                NativeBridge.killProcess(processId)
-                processId = -1
-            }
-            running = false
-            onError("Impossible de démarrer PRoot : ${e.message}")
-            onExit(-1)
         } catch (e: LinkageError) {
-            if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
-            if (createdMaster >= 0) NativeBridge.closePty(createdMaster)
-            running = false
+            cleanupFailedStart(createdMaster, createdSlave)
             onError("Le moteur natif du terminal est absent ou incompatible : ${e.message}")
             onExit(-1)
+        } catch (e: Exception) {
+            cleanupFailedStart(createdMaster, createdSlave)
+            onError("Impossible de démarrer PRoot : ${e.message ?: "erreur inconnue"}")
+            onExit(-1)
         }
+    }
+
+    @Synchronized
+    private fun cleanupFailedStart(createdMaster: Int, createdSlave: Int) {
+        if (createdSlave >= 0) NativeBridge.closePty(createdSlave)
+        if (createdMaster >= 0) NativeBridge.closePty(createdMaster)
+        if (processId > 0) NativeBridge.killProcess(processId)
+        masterFd = -1
+        processId = -1
+        running = false
     }
 
     @Synchronized

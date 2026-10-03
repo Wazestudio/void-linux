@@ -41,12 +41,24 @@ class LinuxHost(private val context: Context) {
 
     fun rootfsFor(distro: String): File = File(rootfsDir, distro)
 
+    /**
+     * Retourne le loader PRoot. Le nom officiel utilisé par la CI est
+     * libproot_loader.so, mais une ancienne version du projet utilisait
+     * libproot-loader.so. On accepte les deux pour éviter un terminal mort
+     * avec un APK déjà construit.
+     */
+    fun prootLoaderFile(): File = listOf(
+        File(nativeLibsDir, "libproot_loader.so"),
+        File(nativeLibsDir, "libproot-loader.so")
+    ).firstOrNull { it.isFile && it.length() > 0L }
+        ?: File(nativeLibsDir, "libproot_loader.so")
+
     fun hasNativeBinaries(): Boolean {
         return listOf(
-            "libproot.so",
-            "libproot_loader.so",
-            "libtalloc.so",
-            "libandroid-shmem.so"
-        ).all { File(nativeLibsDir, it).isFile }
+            File(nativeLibsDir, "libproot.so"),
+            prootLoaderFile(),
+            File(nativeLibsDir, "libtalloc.so"),
+            File(nativeLibsDir, "libandroid-shmem.so")
+        ).all { it.isFile && it.length() > 0L }
     }
 }
